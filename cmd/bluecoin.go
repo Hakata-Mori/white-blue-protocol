@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -36,7 +34,7 @@ var bluecoinDeployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy a new Blue Coin",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		kp, err := loadBCWallet(bcFrom)
+		kp, err := loadWalletByAddress(bcFrom)
 		if err != nil {
 			return err
 		}
@@ -70,7 +68,7 @@ var bluecoinDeployCmd = &cobra.Command{
 			From:      kp.Address,
 			To:        "",
 			Amount:    0,
-			Fee:       types.TxFee,
+			Fee:       types.CalcFee(params.InitWhite),
 			Nonce:     account.Nonce + 1,
 			Payload:   payload,
 			Timestamp: time.Now().Unix(),
@@ -160,18 +158,6 @@ var bluecoinInfoCmd = &cobra.Command{
 		fmt.Printf("Monthly Release: %.6f\n", float64(config.ReleaseMonthly)/1_000_000)
 		return nil
 	},
-}
-
-func loadBCWallet(address string) (*types.KeyPair, error) {
-	walletDir := filepath.Join(dataDir, "wallets")
-	walletFile := filepath.Join(walletDir, address+".json")
-	data, err := os.ReadFile(walletFile)
-	if err != nil {
-		return nil, fmt.Errorf("wallet not found: %s", address)
-	}
-	var kp types.KeyPair
-	json.Unmarshal(data, &kp)
-	return &kp, nil
 }
 
 func init() {

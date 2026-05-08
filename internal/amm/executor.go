@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/white-blue-protocol/wblue/internal/storage"
-	"github.com/white-blue-protocol/wblue/internal/types"
 )
 
 func ExecuteSwap(db *storage.DB, from string, tokenID string, amountIn uint64, direction string) (uint64, error) {
@@ -29,7 +28,7 @@ func ExecuteSwap(db *storage.DB, from string, tokenID string, amountIn uint64, d
 		pool.TotalFeeBurned += fee.Uint64()
 
 		account := db.GetOrCreateAccount(from)
-		account.WhiteBalance -= amountIn + uint64(types.TxFee)
+		account.WhiteBalance -= amountIn
 		account.BlueBalances[tokenID] += amountOut.Uint64()
 		account.Nonce++
 		db.SaveAccount(account)
@@ -40,13 +39,13 @@ func ExecuteSwap(db *storage.DB, from string, tokenID string, amountIn uint64, d
 			new(big.Int).SetUint64(pool.BlueReserve),
 			new(big.Int).SetUint64(pool.WhiteReserve),
 		)
-		pool.BlueReserve += amountIn
+		pool.BlueReserve += amountIn - fee.Uint64()
 		pool.WhiteReserve -= amountOut.Uint64()
 		pool.TotalFeeBurned += fee.Uint64()
 
 		account := db.GetOrCreateAccount(from)
 		account.BlueBalances[tokenID] -= amountIn
-		account.WhiteBalance += amountOut.Uint64() - uint64(types.TxFee)
+		account.WhiteBalance += amountOut.Uint64()
 		account.Nonce++
 		db.SaveAccount(account)
 
@@ -59,7 +58,6 @@ func ExecuteSwap(db *storage.DB, from string, tokenID string, amountIn uint64, d
 		new(big.Int).SetUint64(pool.BlueReserve),
 	)
 	pool.K = newK.String()
-	pool.LastTradedAt = 0
 
 	if err := db.SavePool(pool); err != nil {
 		return 0, err

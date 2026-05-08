@@ -56,38 +56,34 @@ func (s *StateDB) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("invalid nonce: expected %d, got %d", from.Nonce+1, tx.Nonce)
 	}
 
-	fee := uint64(types.TxFee)
-
 	switch tx.Type {
 	case types.TxTransferWhite:
+		fee := types.CalcFee(tx.Amount)
 		if from.WhiteBalance < tx.Amount+fee {
 			return fmt.Errorf("insufficient white balance")
 		}
 	case types.TxTransferBlue:
+		fee := types.CalcFee(tx.Amount)
 		if from.WhiteBalance < fee {
 			return fmt.Errorf("insufficient white balance for fee")
 		}
-		blueBalance := from.BlueBalances[tx.TokenID]
-		if blueBalance < tx.Amount {
+		if from.BlueBalances[tx.TokenID] < tx.Amount {
 			return fmt.Errorf("insufficient blue balance")
 		}
 	case types.TxSwapWhiteBlue:
-		if from.WhiteBalance < tx.Amount+fee {
+		if from.WhiteBalance < tx.Amount {
 			return fmt.Errorf("insufficient white balance")
 		}
 	case types.TxSwapBlueWhite:
-		if from.WhiteBalance < fee {
-			return fmt.Errorf("insufficient white balance for fee")
-		}
-		blueBalance := from.BlueBalances[tx.TokenID]
-		if blueBalance < tx.Amount {
+		if from.BlueBalances[tx.TokenID] < tx.Amount {
 			return fmt.Errorf("insufficient blue balance")
 		}
 	case types.TxDeployBlue:
-		var payload struct {
-			InitWhite uint64 `json:"initWhite"`
+		var payload token.DeployParams
+		if err := json.Unmarshal(tx.Payload, &payload); err != nil {
+			return fmt.Errorf("invalid deploy payload")
 		}
-		json.Unmarshal(tx.Payload, &payload)
+		fee := types.CalcFee(payload.InitWhite)
 		if from.WhiteBalance < payload.InitWhite+fee {
 			return fmt.Errorf("insufficient white balance for deploy")
 		}
@@ -114,7 +110,7 @@ func (s *StateDB) applyBlockReward(tx *types.Transaction) error {
 }
 
 func (s *StateDB) applyTransferWhite(tx *types.Transaction) error {
-	fee := uint64(types.TxFee)
+	fee := types.CalcFee(tx.Amount)
 
 	from := s.db.GetOrCreateAccount(tx.From)
 	from.WhiteBalance -= tx.Amount + fee
@@ -129,7 +125,7 @@ func (s *StateDB) applyTransferWhite(tx *types.Transaction) error {
 }
 
 func (s *StateDB) applyTransferBlue(tx *types.Transaction) error {
-	fee := uint64(types.TxFee)
+	fee := types.CalcFee(tx.Amount)
 
 	from := s.db.GetOrCreateAccount(tx.From)
 	from.WhiteBalance -= fee
@@ -144,17 +140,13 @@ func (s *StateDB) applyTransferBlue(tx *types.Transaction) error {
 	return s.db.SaveAccount(to)
 }
 
-func (s *StateDB) GetAccount(address string) *types.Account {
-	return s.db.GetOrCreateAccount(address)
-}
-
 func (s *StateDB) applyDeployBlue(tx *types.Transaction) error {
 	var params token.DeployParams
 	if err := json.Unmarshal(tx.Payload, &params); err != nil {
 		return fmt.Errorf("invalid deploy payload: %w", err)
 	}
 
-	fee := uint64(types.TxFee)
+	fee := types.CalcFee(params.InitWhite)
 
 	from := s.db.GetOrCreateAccount(tx.From)
 	from.WhiteBalance -= params.InitWhite + fee
@@ -167,11 +159,15 @@ func (s *StateDB) applyDeployBlue(tx *types.Transaction) error {
 	return err
 }
 
-func (s *StateDB) DB() *storage.DB {
-	return s.db
-}
-
 func (s *StateDB) applySwap(tx *types.Transaction, direction string) error {
 	_, err := amm.ExecuteSwap(s.db, tx.From, tx.TokenID, tx.Amount, direction)
 	return err
+}
+
+func (s *StateDB) GetAccount(address string) *types.Account {
+	return s.db.GetOrCreateAccount(address)
+}
+
+func (s *StateDB) DB() *storage.DB {
+	return s.db
 }

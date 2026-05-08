@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -46,9 +44,9 @@ var transferBlueCmd = &cobra.Command{
 }
 
 func doTransfer(txType types.TxType, tokenID string) error {
-	kp, err := loadWallet(transferFrom)
+	kp, err := loadWalletByAddress(transferFrom)
 	if err != nil {
-		return fmt.Errorf("load wallet: %w", err)
+		return err
 	}
 
 	resp, err := http.Get(fmt.Sprintf("http://localhost:8080/api/v1/wallet/%s", kp.Address))
@@ -68,7 +66,7 @@ func doTransfer(txType types.TxType, tokenID string) error {
 		To:        transferTo,
 		Amount:    amount,
 		TokenID:   tokenID,
-		Fee:       types.TxFee,
+		Fee:       types.CalcFee(amount),
 		Nonce:     account.Nonce + 1,
 		Timestamp: time.Now().Unix(),
 	}
@@ -89,31 +87,12 @@ func doTransfer(txType types.TxType, tokenID string) error {
 	}
 	defer submitResp.Body.Close()
 
-	var result map[string]string
-	json.NewDecoder(submitResp.Body).Decode(&result)
-
 	fmt.Printf("Transaction submitted: %s\n", tx.Hash[:16]+"...")
 	fmt.Printf("From: %s\n", tx.From)
 	fmt.Printf("To: %s\n", tx.To)
 	fmt.Printf("Amount: %.6f\n", transferAmount)
 	fmt.Println("(Will be confirmed in next block)")
 	return nil
-}
-
-func loadWallet(address string) (*types.KeyPair, error) {
-	walletDir := filepath.Join(dataDir, "wallets")
-	walletFile := filepath.Join(walletDir, address+".json")
-
-	data, err := os.ReadFile(walletFile)
-	if err != nil {
-		return nil, fmt.Errorf("wallet file not found: %s", walletFile)
-	}
-
-	var kp types.KeyPair
-	if err := json.Unmarshal(data, &kp); err != nil {
-		return nil, err
-	}
-	return &kp, nil
 }
 
 func init() {

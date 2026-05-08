@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -30,7 +28,7 @@ var ammSwapCmd = &cobra.Command{
 	Use:   "swap",
 	Short: "Swap coins via AMM",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		kp, err := loadAMMWallet(swapFrom)
+		kp, err := loadWalletByAddress(swapFrom)
 		if err != nil {
 			return err
 		}
@@ -62,7 +60,7 @@ var ammSwapCmd = &cobra.Command{
 			To:        "",
 			Amount:    amount,
 			TokenID:   swapToken,
-			Fee:       types.TxFee,
+			Fee:       0,
 			Nonce:     account.Nonce + 1,
 			Timestamp: time.Now().Unix(),
 		}
@@ -150,18 +148,6 @@ var ammPriceCmd = &cobra.Command{
 		fmt.Printf("1 Blue = %.6f WC\n", price)
 		return nil
 	},
-}
-
-func loadAMMWallet(address string) (*types.KeyPair, error) {
-	walletDir := filepath.Join(dataDir, "wallets")
-	walletFile := filepath.Join(walletDir, address+".json")
-	data, err := os.ReadFile(walletFile)
-	if err != nil {
-		return nil, fmt.Errorf("wallet not found: %s", address)
-	}
-	var kp types.KeyPair
-	json.Unmarshal(data, &kp)
-	return &kp, nil
 }
 
 func init() {
