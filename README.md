@@ -126,11 +126,13 @@ wblue chain status               # Chain status / 链状态
 
 - PoS consensus, 15-second block interval
 - Block reward: 50 WC (decreases 10% annually)
-- Transaction fee: 1 WC (burned)
+- Transaction fee: max(0.001 WC, 0.1% of amount), burned
+- AMM swap fee: 0.1% (built into pool math, burned)
 
 - PoS 共识，15 秒出块
 - 区块奖励：50 白币（每年衰减 10%）
-- 交易手续费：1 白币（销毁）
+- 交易手续费：max(0.001 WC, 金额×0.1%)，销毁
+- AMM 交易费：0.1%（内建于池子数学，销毁）
 
 ### Blue Coin Issuance / 蓝币发行
 
@@ -186,7 +188,8 @@ wblue (single binary)
 | Initial block reward / 初始出块奖励 | 50 WC |
 | Annual decay / 年衰减率 | 10% |
 | Blue Coin supply (per token) / 蓝币总量 | 1,000,000 |
-| Transaction fee / 交易手续费 | 1 WC (burned) |
+| Transaction fee / 交易手续费 | max(0.001 WC, 0.1%) burned |
+| AMM swap fee / AMM 交易费 | 0.1% burned |
 | Genesis premine / 创世预挖 | 10,000 WC |
 
 ---
