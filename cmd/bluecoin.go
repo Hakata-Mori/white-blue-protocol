@@ -39,7 +39,7 @@ var bluecoinDeployCmd = &cobra.Command{
 			return err
 		}
 
-		resp, err := http.Get(fmt.Sprintf("http://localhost:8080/api/v1/wallet/%s", kp.Address))
+		resp, err := http.Get(fmt.Sprintf("%s/api/v1/wallet/%s", apiURL, kp.Address))
 		if err != nil {
 			return fmt.Errorf("node not running? %w", err)
 		}
@@ -84,7 +84,7 @@ var bluecoinDeployCmd = &cobra.Command{
 		tx.Signature = sig
 
 		txJSON, _ := json.Marshal(tx)
-		submitResp, err := http.Post("http://localhost:8080/api/v1/tx/submit", "application/json", bytes.NewReader(txJSON))
+		submitResp, err := http.Post(fmt.Sprintf("%s/api/v1/tx/submit", apiURL), "application/json", bytes.NewReader(txJSON))
 		if err != nil {
 			return err
 		}
@@ -106,7 +106,7 @@ var bluecoinListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all Blue Coins",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := http.Get("http://localhost:8080/api/v1/bluecoin")
+		resp, err := http.Get(fmt.Sprintf("%s/api/v1/bluecoin", apiURL))
 		if err != nil {
 			return fmt.Errorf("node not running? %w", err)
 		}
@@ -135,7 +135,7 @@ var bluecoinInfoCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		tokenID := args[0]
 
-		resp, err := http.Get(fmt.Sprintf("http://localhost:8080/api/v1/bluecoin/%s", tokenID))
+		resp, err := http.Get(fmt.Sprintf("%s/api/v1/bluecoin/%s", apiURL, tokenID))
 		if err != nil {
 			return fmt.Errorf("node not running? %w", err)
 		}

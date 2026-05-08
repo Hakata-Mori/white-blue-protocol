@@ -13,8 +13,15 @@ import (
 )
 
 var (
-	dataDir   string
-	validator string
+	dataDir     string
+	validator   string
+	apiPort     int
+	apiURL      string
+	noValidator bool
+	p2pPort     int
+	seeds       []string
+	noP2P       bool
+	enableMDNS  bool
 )
 
 var rootCmd = &cobra.Command{
@@ -26,7 +33,9 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the node",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if validator == "" {
+		isValidator := !noValidator
+
+		if isValidator && validator == "" {
 			kp, err := wcrypto.GenerateKeyPair()
 			if err != nil {
 				return err
@@ -45,7 +54,18 @@ var startCmd = &cobra.Command{
 			fmt.Println()
 		}
 
-		n, err := node.NewNode(dataDir, validator)
+		cfg := node.Config{
+			DataDir:     dataDir,
+			Validator:   validator,
+			APIPort:     apiPort,
+			IsValidator: isValidator,
+			P2PEnabled:  !noP2P,
+			P2PPort:     p2pPort,
+			P2PSeeds:    seeds,
+			P2PMDNS:     enableMDNS,
+		}
+
+		n, err := node.NewNode(cfg)
 		if err != nil {
 			return err
 		}
@@ -69,7 +89,14 @@ func init() {
 	defaultDataDir := filepath.Join(home, ".wblue", "data")
 
 	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", defaultDataDir, "Data directory")
+	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "http://localhost:8080", "Node API URL for CLI commands")
 	startCmd.Flags().StringVar(&validator, "validator", "", "Validator address (auto-generated if empty)")
+	startCmd.Flags().IntVar(&apiPort, "api-port", 8080, "HTTP API port")
+	startCmd.Flags().BoolVar(&noValidator, "no-validator", false, "Run as full node without block production")
+	startCmd.Flags().IntVar(&p2pPort, "p2p-port", 30303, "P2P listen port")
+	startCmd.Flags().StringArrayVar(&seeds, "seeds", nil, "Seed node multiaddrs")
+	startCmd.Flags().BoolVar(&noP2P, "no-p2p", false, "Disable P2P networking")
+	startCmd.Flags().BoolVar(&enableMDNS, "mdns", true, "Enable mDNS discovery")
 	rootCmd.AddCommand(startCmd)
 }
 

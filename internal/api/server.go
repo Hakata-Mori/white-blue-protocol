@@ -137,6 +137,11 @@ func (s *Server) handleSubmitTx(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.state.ValidateTransaction(&tx); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	if err := s.mempool.Add(tx); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

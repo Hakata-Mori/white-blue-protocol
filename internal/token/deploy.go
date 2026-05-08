@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	"github.com/white-blue-protocol/wblue/internal/storage"
 	"github.com/white-blue-protocol/wblue/internal/types"
@@ -27,7 +26,7 @@ func GenerateTokenID(creator, name string, nonce uint64) string {
 	return hex.EncodeToString(hash[:8])
 }
 
-func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64) (*types.BlueCoinConfig, error) {
+func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64, blockTime int64) (*types.BlueCoinConfig, error) {
 	if params.PoolRatio+params.TeamRatio != 100 {
 		return nil, fmt.Errorf("poolRatio + teamRatio must equal 100")
 	}
@@ -49,7 +48,7 @@ func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64) 
 	poolAllocation := totalSupply * uint64(params.PoolRatio) / 100
 	teamAllocation := totalSupply * uint64(params.TeamRatio) / 100
 
-	now := time.Now().Unix()
+	now := blockTime
 
 	config := &types.BlueCoinConfig{
 		TokenID:        tokenID,

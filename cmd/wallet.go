@@ -78,7 +78,7 @@ var walletInfoCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		address := args[0]
 
-		resp, err := http.Get(fmt.Sprintf("http://localhost:8080/api/v1/wallet/%s", address))
+		resp, err := http.Get(fmt.Sprintf("%s/api/v1/wallet/%s", apiURL, address))
 		if err != nil {
 			return fmt.Errorf("node not running? %w", err)
 		}

@@ -17,7 +17,7 @@ var chainStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show chain status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := http.Get("http://localhost:8080/api/v1/chain/status")
+		resp, err := http.Get(fmt.Sprintf("%s/api/v1/chain/status", apiURL))
 		if err != nil {
 			return fmt.Errorf("node not running? %w", err)
 		}

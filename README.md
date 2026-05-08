@@ -31,7 +31,14 @@ make build
 ### Run Node / 启动节点
 
 ```bash
+# Validator node (default) / 验证者节点（默认）
 ./wblue start
+
+# Full node (non-validator) / 全节点（不出块）
+./wblue start --no-validator
+
+# Single-node mode (no P2P, backward compatible) / 单节点模式（无 P2P，向后兼容）
+./wblue start --no-p2p
 ```
 
 This will:
@@ -39,16 +46,44 @@ This will:
 - Create the genesis block (validator receives 10,000 WC premine)
 - Start producing blocks every 15 seconds
 - Start HTTP API on port 8080
+- Start P2P networking on port 30303 (with mDNS discovery)
 
 启动后将：
 - 自动生成验证者地址（保存到钱包）
 - 创建创世块（验证者获得 10,000 白币预挖）
 - 每 15 秒出一个块
 - 在 8080 端口启动 HTTP API
+- 在 30303 端口启动 P2P 网络（支持 mDNS 自动发现）
+
+### Multi-Node Setup / 多节点部署
+
+```bash
+# Terminal 1: Start validator node A / 启动验证者节点 A
+./wblue start --api-port 8080 --p2p-port 30303
+
+# Terminal 2: Start full node B (auto-discovers A via mDNS on LAN)
+# 启动全节点 B（局域网内通过 mDNS 自动发现 A）
+./wblue start --no-validator --api-port 8081 --p2p-port 30304 --data-dir ~/.wblue/data2
+
+# Or connect to a remote seed node / 或连接远程种子节点
+./wblue start --no-validator --seeds "/ip4/1.2.3.4/tcp/30303/p2p/12D3KooW..."
+```
 
 ---
 
 ## Commands / 命令
+
+### Node / 节点
+
+```bash
+wblue start                              # Start validator + P2P / 启动验证者+P2P
+wblue start --no-validator               # Full node, no block production / 全节点不出块
+wblue start --no-p2p                     # Single node, no networking / 单节点无网络
+wblue start --api-port 8081              # Custom API port / 自定义 API 端口
+wblue start --p2p-port 30304             # Custom P2P port / 自定义 P2P 端口
+wblue start --seeds "/ip4/.../p2p/..."   # Connect to seed nodes / 连接种子节点
+wblue start --mdns=false                 # Disable mDNS discovery / 禁用 mDNS
+```
 
 ### Wallet / 钱包
 
@@ -104,6 +139,13 @@ wblue amm price <tokenId>
 wblue chain status               # Chain status / 链状态
 ```
 
+### Global Flags / 全局参数
+
+```bash
+wblue --api-url http://localhost:8081 chain status   # Connect to a different node / 连接不同节点
+wblue --data-dir /path/to/data wallet list           # Custom data dir / 自定义数据目录
+```
+
 ---
 
 ## HTTP API
@@ -117,6 +159,33 @@ wblue chain status               # Chain status / 链状态
 | GET | `/api/v1/bluecoin/:tokenId` | Blue coin info / 蓝币详情 |
 | GET | `/api/v1/pool/:tokenId` | Pool info / 池子信息 |
 | POST | `/api/v1/tx/submit` | Submit transaction / 提交交易 |
+
+---
+
+## P2P Networking / P2P 网络
+
+Built on [libp2p](https://libp2p.io/) with GossipSub for message propagation.
+
+基于 [libp2p](https://libp2p.io/) 构建，使用 GossipSub 进行消息传播。
+
+### Features / 功能
+
+- **Block broadcast**: new blocks propagate to all connected nodes / 新区块广播到所有节点
+- **Transaction relay**: submitted transactions forwarded across the network / 提交的交易在全网转发
+- **Block sync**: new nodes automatically download historical blocks from peers / 新节点自动从对等节点同步历史区块
+- **mDNS discovery**: automatic peer discovery on local network / 局域网自动发现节点
+- **Seed nodes**: bootstrap from known nodes on the internet / 通过已知种子节点接入网络
+
+### Protocol / 协议
+
+| Component | Details |
+|-----------|---------|
+| GossipSub topics | `wblue/blocks/1`, `wblue/txs/1` |
+| Sync stream | `/wblue/sync/1.0.0` (JSON newline-delimited) |
+| Node identity | Ed25519 key (persisted at `<dataDir>/node.key`) |
+| Default port | 30303 |
+| Max peers | 50 (managed by ConnManager) |
+| Message size limit | 1 MB |
 
 ---
 
@@ -168,6 +237,7 @@ wblue chain status               # Chain status / 链状态
 
 ```
 wblue (single binary)
+├── P2P Network (libp2p, GossipSub, mDNS, block sync)
 ├── Consensus (PoS, 15s blocks)
 ├── State Machine (accounts, balances, pools)
 ├── Storage (BoltDB)
@@ -191,6 +261,8 @@ wblue (single binary)
 | Transaction fee / 交易手续费 | max(0.001 WC, 0.1%) burned |
 | AMM swap fee / AMM 交易费 | 0.1% burned |
 | Genesis premine / 创世预挖 | 10,000 WC |
+| P2P default port / P2P 默认端口 | 30303 |
+| API default port / API 默认端口 | 8080 |
 
 ---
 
@@ -202,7 +274,7 @@ wblue (single binary)
 - [x] AMM trading / AMM 交易
 - [x] Vesting schedule / 锁仓释放
 - [x] CLI + HTTP API
-- [ ] P2P networking / P2P 网络
+- [x] P2P networking / P2P 网络
 - [ ] Multi-validator PoS / 多验证者 PoS
 - [ ] Web UI / 网页界面
 - [ ] Smart contract VM / 智能合约虚拟机

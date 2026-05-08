@@ -155,7 +155,7 @@ func (s *StateDB) applyDeployBlue(tx *types.Transaction) error {
 		return err
 	}
 
-	_, err := token.Deploy(s.db, tx.From, &params, tx.Nonce)
+	_, err := token.Deploy(s.db, tx.From, &params, tx.Nonce, tx.Timestamp)
 	return err
 }
 

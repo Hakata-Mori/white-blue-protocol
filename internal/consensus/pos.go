@@ -8,7 +8,6 @@ import (
 	"github.com/white-blue-protocol/wblue/internal/crypto"
 	"github.com/white-blue-protocol/wblue/internal/state"
 	"github.com/white-blue-protocol/wblue/internal/storage"
-	"github.com/white-blue-protocol/wblue/internal/token"
 	"github.com/white-blue-protocol/wblue/internal/txpool"
 	"github.com/white-blue-protocol/wblue/internal/types"
 )
@@ -19,6 +18,7 @@ type PoS struct {
 	mempool   *txpool.Mempool
 	validator string
 	stopCh    chan struct{}
+	BlockCh   chan<- *types.Block
 }
 
 func NewPoS(db *storage.DB, st *state.StateDB, mp *txpool.Mempool, validator string) *PoS {
@@ -29,6 +29,10 @@ func NewPoS(db *storage.DB, st *state.StateDB, mp *txpool.Mempool, validator str
 		validator: validator,
 		stopCh:    make(chan struct{}),
 	}
+}
+
+func (p *PoS) SetBlockChannel(ch chan<- *types.Block) {
+	p.BlockCh = ch
 }
 
 func (p *PoS) Start() {
@@ -94,22 +98,17 @@ func (p *PoS) forgeBlock() {
 		return
 	}
 
-	if err := p.db.SaveBlock(block); err != nil {
-		fmt.Printf("Error saving block: %v\n", err)
+	if err := chain.ApplyBlock(p.db, p.state, block); err != nil {
+		fmt.Printf("Error applying block: %v\n", err)
 		return
 	}
 
-	for i := range txs {
-		if err := p.state.ApplyTransaction(&txs[i]); err != nil {
-			fmt.Printf("Error applying tx: %v\n", err)
+	if p.BlockCh != nil {
+		select {
+		case p.BlockCh <- block:
+		default:
 		}
 	}
-
-	if reward > 0 {
-		p.db.SetTotalMinted(totalMinted + reward)
-	}
-
-	token.ProcessVesting(p.db, time.Now().Unix())
 
 	txCount := len(txs) - 1
 	if txCount < 0 {
