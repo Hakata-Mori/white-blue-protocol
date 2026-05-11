@@ -172,6 +172,7 @@ func init() {
 	startCmd.Flags().BoolVar(&devMode, "dev", false, "Dev mode: accelerated block timing for testing")
 	startCmd.Flags().StringVar(&chainID, "chain-id", "", "Chain ID (default from config or wblue-mainnet-1)")
 	startCmd.Flags().BoolVar(&genesis, "genesis", false, "Create a new chain (genesis block). Only use this once to bootstrap a new network")
+	startCmd.Flags().MarkHidden("genesis")
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
 }
