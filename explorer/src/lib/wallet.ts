@@ -1,6 +1,8 @@
 import { p256 } from '@noble/curves/nist.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { gcm } from '@noble/ciphers/aes.js';
 import { scrypt } from 'scrypt-js';
+import { randomBytes } from '@noble/ciphers/utils.js';
 
 function safeHexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -124,21 +126,17 @@ export async function encryptKeystore(
   address: string,
   password: string
 ): Promise<KeystoreFile> {
-  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const salt = randomBytes(32);
   const dk = await scrypt(
     new TextEncoder().encode(password),
     salt,
     32768, 8, 1, 32
   );
 
-  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk) as BufferSource, 'AES-GCM', false, ['encrypt']);
-  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const nonce = randomBytes(12);
   const privBytes = safeHexToBytes(privateKeyHex);
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce },
-    key,
-    privBytes as BufferSource
-  );
+  const cipher = gcm(new Uint8Array(dk), nonce);
+  const ciphertext = cipher.encrypt(privBytes);
 
   return {
     version: 1,
@@ -146,7 +144,7 @@ export async function encryptKeystore(
     publicKey: publicKeyHex,
     crypto: {
       cipher: 'aes-256-gcm',
-      ciphertext: safeBytesToHex(new Uint8Array(ciphertext)),
+      ciphertext: safeBytesToHex(ciphertext),
       nonce: safeBytesToHex(nonce),
       kdf: 'scrypt',
       kdfparams: {
@@ -174,17 +172,12 @@ export async function decryptKeystore(
     ks.crypto.kdfparams.dklen
   );
 
-  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk) as BufferSource, 'AES-GCM', false, ['decrypt']);
   const nonce = safeHexToBytes(ks.crypto.nonce);
   const ciphertext = safeHexToBytes(ks.crypto.ciphertext);
+  const decipher = gcm(new Uint8Array(dk), nonce);
+  const plaintext = decipher.decrypt(ciphertext);
 
-  const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: nonce as BufferSource },
-    key,
-    ciphertext as BufferSource
-  );
-
-  const privateKeyHex = safeBytesToHex(new Uint8Array(plaintext));
+  const privateKeyHex = safeBytesToHex(plaintext);
   return {
     privateKey: privateKeyHex,
     publicKey: ks.publicKey,

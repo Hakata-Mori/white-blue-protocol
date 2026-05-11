@@ -40,8 +40,8 @@ export default function ImportWallet({ onImported }: ImportWalletProps) {
     try {
       const kp = await decryptKeystore(keystoreData, password);
       onImported(kp);
-    } catch {
-      setError('Wrong password or corrupted keystore');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Wrong password or corrupted keystore');
     } finally {
       setLoading(false);
     }
