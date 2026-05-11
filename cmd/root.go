@@ -34,7 +34,7 @@ var (
 )
 
 var defaultSeeds = []string{
-	"/ip4/8.217.52.231/tcp/30303/p2p/12D3KooWRro1gqZfzseX47pZdLNKenX2bG9WbQkkWT6x36sE4hpZ",
+	"/ip4/8.217.52.231/tcp/30303/p2p/12D3KooWFp3UcCexRsAbxQ81DtMRedQGwG5hmv1QjP2FzUCXHd8S",
 }
 
 var rootCmd = &cobra.Command{
