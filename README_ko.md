@@ -146,7 +146,8 @@ make build
 ### 지갑
 
 ```bash
-wblue wallet create                # 새 지갑 생성
+wblue wallet create                # 새 지갑 생성 (니모닉 백업 포함)
+wblue wallet recover               # 니모닉 문구로 지갑 복구
 wblue wallet list                  # 지갑 목록 조회
 wblue wallet info <address>        # 잔액 조회
 ```
@@ -237,6 +238,7 @@ wblue version
 | GET | `/api/v1/pool/:tokenId` | AMM 풀 정보 |
 | GET | `/api/v1/validators` | 검증자 세트 |
 | GET | `/api/v1/multisig/:address` | 멀티시그 계정 |
+| GET | /api/v1/address/:address/txs | 주소별 트랜잭션 히스토리 |
 | POST | `/api/v1/tx/submit` | 트랜잭션 제출 |
 | GET | `/api/v1/tx/:hash` | 트랜잭션 영수증 |
 
@@ -291,8 +293,9 @@ wblue (단일 바이너리)
 - [x] API 속도 제한, CORS, 입력 검증
 - [x] 구조화된 로깅 (slog)
 - [x] 테스트넷 배포
+- [x] 주소별 트랜잭션 히스토리 인덱스
+- [x] 니모닉 백업 (BIP39, 12단어)
 - [ ] 홈 노드를 위한 NAT 트래버설
-- [ ] 주소별 트랜잭션 히스토리 인덱스
 - [ ] 모바일 지갑 앱
 
 ---

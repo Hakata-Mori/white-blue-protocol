@@ -146,7 +146,8 @@ Your node will:
 ### Wallet
 
 ```bash
-wblue wallet create                # Create new wallet
+wblue wallet create                # Create new wallet (with mnemonic backup)
+wblue wallet recover               # Recover wallet from mnemonic phrase
 wblue wallet list                  # List wallets
 wblue wallet info <address>        # Show balance
 ```
@@ -237,6 +238,7 @@ wblue version
 | GET | `/api/v1/pool/:tokenId` | AMM pool info |
 | GET | `/api/v1/validators` | Validator set |
 | GET | `/api/v1/multisig/:address` | Multisig account |
+| GET | /api/v1/address/:address/txs | Address transaction history |
 | POST | `/api/v1/tx/submit` | Submit transaction |
 | GET | `/api/v1/tx/:hash` | Transaction receipt |
 
@@ -291,8 +293,9 @@ wblue (single binary)
 - [x] API rate limiting, CORS, input validation
 - [x] Structured logging (slog)
 - [x] Testnet deployment
+- [x] Address transaction history index
+- [x] Mnemonic backup (BIP39, 12 words)
 - [ ] NAT traversal for home nodes
-- [ ] Address transaction history index
 - [ ] Mobile wallet app
 
 ---

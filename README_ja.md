@@ -146,7 +146,8 @@ make build
 ### ウォレット
 
 ```bash
-wblue wallet create                # 新しいウォレットを作成
+wblue wallet create                # 新しいウォレットを作成（ニーモニックバックアップ付き）
+wblue wallet recover               # ニーモニックフレーズからウォレットを復元
 wblue wallet list                  # ウォレット一覧を表示
 wblue wallet info <address>        # 残高を表示
 ```
@@ -237,6 +238,7 @@ wblue version
 | GET | `/api/v1/pool/:tokenId` | AMMプール情報 |
 | GET | `/api/v1/validators` | バリデータセット |
 | GET | `/api/v1/multisig/:address` | マルチシグアカウント |
+| GET | /api/v1/address/:address/txs | アドレストランザクション履歴 |
 | POST | `/api/v1/tx/submit` | トランザクション送信 |
 | GET | `/api/v1/tx/:hash` | トランザクションレシート |
 
@@ -291,8 +293,9 @@ wblue (単一バイナリ)
 - [x] APIレート制限、CORS、入力バリデーション
 - [x] 構造化ログ（slog）
 - [x] テストネットデプロイ
+- [x] アドレストランザクション履歴インデックス
+- [x] ニーモニックバックアップ（BIP39、12ワード）
 - [ ] ホームノード向けNATトラバーサル
-- [ ] アドレストランザクション履歴インデックス
 - [ ] モバイルウォレットアプリ
 
 ---

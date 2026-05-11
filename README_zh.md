@@ -146,7 +146,8 @@ make build
 ### 钱包
 
 ```bash
-wblue wallet create                # 创建新钱包
+wblue wallet create                # 创建新钱包（含助记词备份）
+wblue wallet recover               # 通过助记词恢复钱包
 wblue wallet list                  # 列出钱包
 wblue wallet info <address>        # 查看余额
 ```
@@ -237,6 +238,7 @@ wblue version
 | GET | `/api/v1/pool/:tokenId` | AMM 池信息 |
 | GET | `/api/v1/validators` | 验证者集合 |
 | GET | `/api/v1/multisig/:address` | 多签账户 |
+| GET | /api/v1/address/:address/txs | 地址交易历史 |
 | POST | `/api/v1/tx/submit` | 提交交易 |
 | GET | `/api/v1/tx/:hash` | 交易回执 |
 
@@ -291,8 +293,9 @@ wblue (单一可执行文件)
 - [x] API 速率限制、CORS、输入验证
 - [x] 结构化日志（slog）
 - [x] 测试网部署
+- [x] 地址交易历史索引
+- [x] 助记词备份（BIP39，12 个单词）
 - [ ] 家庭节点 NAT 穿透
-- [ ] 地址交易历史索引
 - [ ] 移动端钱包应用
 
 ---
