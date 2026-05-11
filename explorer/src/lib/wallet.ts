@@ -1,7 +1,18 @@
 import { p256 } from '@noble/curves/nist.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, hexToBytes } from '@noble/curves/utils.js';
 import { scrypt } from 'scrypt-js';
+
+function safeHexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function safeBytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export interface KeyPair {
   privateKey: string;
@@ -52,15 +63,15 @@ export function generateKeyPair(): KeyPair {
   const pubPoint = p256.getPublicKey(privBytes, true);
   const address = pubKeyToAddress(pubPoint);
   return {
-    privateKey: bytesToHex(privBytes),
-    publicKey: bytesToHex(pubPoint),
+    privateKey: safeBytesToHex(privBytes),
+    publicKey: safeBytesToHex(pubPoint),
     address,
   };
 }
 
 export function pubKeyToAddress(pubKeyBytes: Uint8Array): string {
   const hash = sha256(pubKeyBytes);
-  return '0x' + bytesToHex(hash.slice(12));
+  return '0x' + safeBytesToHex(hash.slice(12));
 }
 
 function canonicalJSON(tx: TransactionInput & { hash: string; signature: string }): string {
@@ -95,10 +106,10 @@ export function signTransactionWithKey(tx: TransactionInput, privateKeyHex: stri
   const jsonBytes = new TextEncoder().encode(jsonStr);
 
   const hashBytes = sha256(jsonBytes);
-  const txHash = bytesToHex(hashBytes);
+  const txHash = safeBytesToHex(hashBytes);
 
-  const sigBytes = p256.sign(jsonBytes, hexToBytes(privateKeyHex), { lowS: true });
-  const sigHex = bytesToHex(sigBytes);
+  const sigBytes = p256.sign(jsonBytes, safeHexToBytes(privateKeyHex), { lowS: true });
+  const sigHex = safeBytesToHex(sigBytes);
 
   return {
     ...tx,
@@ -120,13 +131,13 @@ export async function encryptKeystore(
     32768, 8, 1, 32
   );
 
-  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk), 'AES-GCM', false, ['encrypt']);
+  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk) as BufferSource, 'AES-GCM', false, ['encrypt']);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const privBytes = new Uint8Array(hexToBytes(privateKeyHex));
+  const privBytes = safeHexToBytes(privateKeyHex);
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: nonce },
     key,
-    privBytes
+    privBytes as BufferSource
   );
 
   return {
@@ -135,15 +146,15 @@ export async function encryptKeystore(
     publicKey: publicKeyHex,
     crypto: {
       cipher: 'aes-256-gcm',
-      ciphertext: bytesToHex(new Uint8Array(ciphertext)),
-      nonce: bytesToHex(nonce),
+      ciphertext: safeBytesToHex(new Uint8Array(ciphertext)),
+      nonce: safeBytesToHex(nonce),
       kdf: 'scrypt',
       kdfparams: {
         n: 32768,
         r: 8,
         p: 1,
         dklen: 32,
-        salt: bytesToHex(salt),
+        salt: safeBytesToHex(salt),
       },
     },
   };
@@ -153,7 +164,7 @@ export async function decryptKeystore(
   ks: KeystoreFile,
   password: string
 ): Promise<KeyPair> {
-  const salt = new Uint8Array(hexToBytes(ks.crypto.kdfparams.salt));
+  const salt = safeHexToBytes(ks.crypto.kdfparams.salt);
   const dk = await scrypt(
     new TextEncoder().encode(password),
     salt,
@@ -163,17 +174,17 @@ export async function decryptKeystore(
     ks.crypto.kdfparams.dklen
   );
 
-  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk), 'AES-GCM', false, ['decrypt']);
-  const nonce = new Uint8Array(hexToBytes(ks.crypto.nonce));
-  const ciphertext = new Uint8Array(hexToBytes(ks.crypto.ciphertext));
+  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk) as BufferSource, 'AES-GCM', false, ['decrypt']);
+  const nonce = safeHexToBytes(ks.crypto.nonce);
+  const ciphertext = safeHexToBytes(ks.crypto.ciphertext);
 
   const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: nonce },
+    { name: 'AES-GCM', iv: nonce as BufferSource },
     key,
-    ciphertext
+    ciphertext as BufferSource
   );
 
-  const privateKeyHex = bytesToHex(new Uint8Array(plaintext));
+  const privateKeyHex = safeBytesToHex(new Uint8Array(plaintext));
   return {
     privateKey: privateKeyHex,
     publicKey: ks.publicKey,
