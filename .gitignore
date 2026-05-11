@@ -2,3 +2,5 @@ wblue
 *.db
 .wblue/
 .DS_Store
+node_modules/
+explorer/dist/

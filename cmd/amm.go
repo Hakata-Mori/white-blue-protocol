@@ -17,6 +17,7 @@ var (
 	swapToken     string
 	swapDirection string
 	swapAmountIn  float64
+	swapMinOut    float64
 )
 
 var ammCmd = &cobra.Command{
@@ -55,14 +56,16 @@ var ammSwapCmd = &cobra.Command{
 		amount := uint64(swapAmountIn * 1_000_000)
 
 		tx := types.Transaction{
-			Type:      txType,
-			From:      kp.Address,
-			To:        "",
-			Amount:    amount,
-			TokenID:   swapToken,
-			Fee:       0,
-			Nonce:     account.Nonce + 1,
-			Timestamp: time.Now().Unix(),
+			Type:         txType,
+			From:         kp.Address,
+			To:           "",
+			Amount:       amount,
+			TokenID:      swapToken,
+			Fee:          0,
+			Nonce:        account.Nonce + 1,
+			PublicKey:    kp.PublicKey,
+			MinAmountOut: uint64(swapMinOut * 1_000_000),
+			Timestamp:    time.Now().Unix(),
 		}
 
 		txData, _ := json.Marshal(tx)
@@ -155,6 +158,7 @@ func init() {
 	ammSwapCmd.Flags().StringVar(&swapToken, "token", "", "Blue coin token ID")
 	ammSwapCmd.Flags().StringVar(&swapDirection, "direction", "", "white-to-blue or blue-to-white")
 	ammSwapCmd.Flags().Float64Var(&swapAmountIn, "amount-in", 0, "Amount to swap")
+	ammSwapCmd.Flags().Float64Var(&swapMinOut, "min-out", 0, "Minimum output amount (slippage protection)")
 
 	ammCmd.AddCommand(ammSwapCmd)
 	ammCmd.AddCommand(ammPoolInfoCmd)

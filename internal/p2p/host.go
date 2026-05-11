@@ -11,13 +11,15 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
+	libcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 
 	"github.com/white-blue-protocol/wblue/internal/chain"
+	wcrypto "github.com/white-blue-protocol/wblue/internal/crypto"
+	"github.com/white-blue-protocol/wblue/internal/log"
 	"github.com/white-blue-protocol/wblue/internal/state"
 	"github.com/white-blue-protocol/wblue/internal/storage"
 	"github.com/white-blue-protocol/wblue/internal/txpool"
@@ -25,10 +27,11 @@ import (
 )
 
 const (
-	TopicBlocks    = "wblue/blocks/1"
-	TopicTxs       = "wblue/txs/1"
-	SyncProtocolID = "/wblue/sync/1.0.0"
-	MaxSyncBatch   = 256
+	TopicBlocks     = "wblue/blocks/1"
+	TopicTxs        = "wblue/txs/1"
+	TopicHeartbeats = "wblue/heartbeat/1"
+	SyncProtocolID  = "/wblue/sync/1.0.0"
+	MaxSyncBatch    = 256
 )
 
 type Config struct {
@@ -49,8 +52,10 @@ type Host struct {
 	ps         *pubsub.PubSub
 	blockTopic *pubsub.Topic
 	txTopic    *pubsub.Topic
+	hbTopic    *pubsub.Topic
 	blockSub   *pubsub.Subscription
 	txSub      *pubsub.Subscription
+	hbSub      *pubsub.Subscription
 
 	blockCh <-chan *types.Block
 
@@ -62,6 +67,9 @@ type Host struct {
 	seenTxs    *ringSet
 	syncing    bool
 	syncMu     sync.Mutex
+
+	hbTracker   map[string]*HeartbeatMsg
+	hbTrackerMu sync.Mutex
 }
 
 func New(cfg Config, db *storage.DB, mp *txpool.Mempool, st *state.StateDB, blockCh <-chan *types.Block) (*Host, error) {
@@ -90,7 +98,6 @@ func New(cfg Config, db *storage.DB, mp *txpool.Mempool, st *state.StateDB, bloc
 	}
 
 	ps, err := pubsub.NewGossipSub(ctx, h,
-		pubsub.WithFloodPublish(true),
 		pubsub.WithMaxMessageSize(1<<20),
 	)
 	if err != nil {
@@ -127,6 +134,20 @@ func New(cfg Config, db *storage.DB, mp *txpool.Mempool, st *state.StateDB, bloc
 		return nil, err
 	}
 
+	hbTopic, err := ps.Join(TopicHeartbeats)
+	if err != nil {
+		h.Close()
+		cancel()
+		return nil, err
+	}
+
+	hbSub, err := hbTopic.Subscribe()
+	if err != nil {
+		h.Close()
+		cancel()
+		return nil, err
+	}
+
 	return &Host{
 		cfg:        cfg,
 		db:         db,
@@ -136,27 +157,30 @@ func New(cfg Config, db *storage.DB, mp *txpool.Mempool, st *state.StateDB, bloc
 		ps:         ps,
 		blockTopic: blockTopic,
 		txTopic:    txTopic,
+		hbTopic:    hbTopic,
 		blockSub:   blockSub,
 		txSub:      txSub,
+		hbSub:      hbSub,
 		blockCh:    blockCh,
 		ctx:        ctx,
 		cancel:     cancel,
 		seenBlocks: newRingSet(256),
 		seenTxs:    newRingSet(4096),
+		hbTracker:  make(map[string]*HeartbeatMsg),
 	}, nil
 }
 
 func (p *Host) Start() error {
 	for _, addr := range p.h.Addrs() {
-		fmt.Printf("[P2P] Listening on %s/p2p/%s\n", addr, p.h.ID())
+		log.Info("p2p listening", "addr", fmt.Sprintf("%s/p2p/%s", addr, p.h.ID()))
 	}
-	fmt.Printf("[P2P] PeerID: %s\n", p.h.ID())
+	log.Info("p2p peer id", "id", p.h.ID().String())
 
 	p.h.SetStreamHandler(SyncProtocolID, p.handleSyncStream)
 
 	if p.cfg.EnableMDNS {
 		if err := startMDNS(p.h, p.cfg.ChainID); err != nil {
-			fmt.Printf("[P2P] mDNS start failed: %v\n", err)
+			log.Warn("mdns start failed", "err", err)
 		}
 	}
 
@@ -164,9 +188,10 @@ func (p *Host) Start() error {
 		dialSeeds(p.ctx, p.h, p.cfg.Seeds)
 	}
 
-	p.wg.Add(3)
+	p.wg.Add(4)
 	go p.receiveBlocks()
 	go p.receiveTxs()
+	go p.receiveHeartbeats()
 	go p.relayLocalBlocks()
 
 	return nil
@@ -177,7 +202,7 @@ func (p *Host) SyncOnStartup() {
 
 	peers := p.h.Network().Peers()
 	if len(peers) == 0 {
-		fmt.Println("[P2P] No peers found, skipping initial sync")
+		log.Info("no peers found, skipping initial sync")
 		return
 	}
 
@@ -199,21 +224,21 @@ func (p *Host) SyncOnStartup() {
 
 	ourHeight := p.db.GetLatestHeight()
 	if bestPeer.height > ourHeight {
-		fmt.Printf("[P2P] Behind network: local=%d, best=%d. Starting sync...\n", ourHeight, bestPeer.height)
+		log.Info("behind network, starting sync", "local", ourHeight, "best", bestPeer.height)
 		for _, pid := range peers {
 			status, err := p.queryPeerStatus(pid)
 			if err != nil || status.Height <= ourHeight {
 				continue
 			}
 			if err := p.SyncFromPeer(pid, ourHeight, status.Height); err != nil {
-				fmt.Printf("[P2P] Sync from %s failed: %v\n", pid.String()[:12], err)
+				log.Warn("sync from peer failed", "peer", pid.String()[:12], "err", err)
 				continue
 			}
-			fmt.Printf("[P2P] Sync complete. Height: %d\n", p.db.GetLatestHeight())
+			log.Info("sync complete", "height", p.db.GetLatestHeight())
 			return
 		}
 	} else {
-		fmt.Println("[P2P] Already up to date")
+		log.Info("already up to date")
 	}
 }
 
@@ -221,9 +246,10 @@ func (p *Host) Stop() {
 	p.cancel()
 	p.blockSub.Cancel()
 	p.txSub.Cancel()
+	p.hbSub.Cancel()
 	p.wg.Wait()
 	p.h.Close()
-	fmt.Println("[P2P] Stopped")
+	log.Info("p2p stopped")
 }
 
 func (p *Host) BroadcastTx(tx types.Transaction) {
@@ -287,9 +313,11 @@ func (p *Host) receiveBlocks() {
 		ourHeight := p.db.GetLatestHeight()
 		block := &bm.Block
 
+		p.checkDoubleSign(block)
+
 		if block.Header.Height == ourHeight+1 {
 			if err := p.validateAndApplyBlock(block); err != nil {
-				fmt.Printf("[P2P] Rejected block #%d: %v\n", block.Header.Height, err)
+				log.Warn("rejected block", "height", block.Header.Height, "err", err)
 				continue
 			}
 			p.seenBlocks.Add(block.Header.Hash)
@@ -300,9 +328,9 @@ func (p *Host) receiveBlocks() {
 			}
 			p.mempool.RemoveTxs(hashes)
 
-			fmt.Printf("[P2P] Applied block #%d from %s\n", block.Header.Height, msg.ReceivedFrom.String()[:12])
+			log.Info("applied block", "height", block.Header.Height, "from", msg.ReceivedFrom.String()[:12])
 		} else if block.Header.Height > ourHeight+1 {
-			fmt.Printf("[P2P] Behind: got block #%d, local #%d. Triggering sync...\n", block.Header.Height, ourHeight)
+			log.Info("behind, triggering sync", "got", block.Header.Height, "local", ourHeight)
 			go p.SyncFromPeer(msg.ReceivedFrom, ourHeight, block.Header.Height)
 		}
 	}
@@ -340,6 +368,61 @@ func (p *Host) receiveTxs() {
 
 		p.mempool.Add(tm.Tx)
 	}
+}
+
+func (p *Host) receiveHeartbeats() {
+	defer p.wg.Done()
+	for {
+		msg, err := p.hbSub.Next(p.ctx)
+		if err != nil {
+			return
+		}
+		if msg.ReceivedFrom == p.h.ID() {
+			continue
+		}
+
+		env, err := Decode(msg.Data)
+		if err != nil || env.Version != EnvelopeVersion || env.Type != MsgTypeHeartbeat {
+			continue
+		}
+
+		var hb HeartbeatMsg
+		if err := json.Unmarshal(env.Payload, &hb); err != nil {
+			continue
+		}
+
+		if hb.Address == "" || hb.PublicKey == "" || hb.Signature == "" {
+			continue
+		}
+
+		p.hbTrackerMu.Lock()
+		p.hbTracker[hb.Address] = &hb
+		p.hbTrackerMu.Unlock()
+	}
+}
+
+func (p *Host) GetPendingHeartbeats() []*HeartbeatMsg {
+	p.hbTrackerMu.Lock()
+	defer p.hbTrackerMu.Unlock()
+	var result []*HeartbeatMsg
+	for _, hb := range p.hbTracker {
+		result = append(result, hb)
+	}
+	return result
+}
+
+func (p *Host) ClearHeartbeat(address string) {
+	p.hbTrackerMu.Lock()
+	defer p.hbTrackerMu.Unlock()
+	delete(p.hbTracker, address)
+}
+
+func (p *Host) BroadcastHeartbeat(hb *HeartbeatMsg) {
+	data, err := Encode(MsgTypeHeartbeat, hb)
+	if err != nil {
+		return
+	}
+	p.hbTopic.Publish(p.ctx, data)
 }
 
 func (p *Host) relayLocalBlocks() {
@@ -385,11 +468,44 @@ func (p *Host) validateAndApplyBlock(block *types.Block) error {
 		return fmt.Errorf("block from the future")
 	}
 
+	vs := p.db.GetValidatorSet()
+	active := vs.ActiveValidatorsAt(prevBlock.Header.Height)
+
+	if len(active) > 0 {
+		elapsed := block.Header.Timestamp - prevBlock.Header.Timestamp
+		if elapsed < int64(types.GetBlockInterval()) {
+			return fmt.Errorf("block too early")
+		}
+		skip := int(elapsed/int64(types.GetBlockInterval())) - 1
+		if skip < 0 {
+			skip = 0
+		}
+		validProducer := false
+		for s := 0; s <= skip; s++ {
+			idx := (int(block.Header.Height) + s) % len(active)
+			if block.Header.Validator == active[idx].Address {
+				validProducer = true
+				break
+			}
+		}
+		if !validProducer {
+			return fmt.Errorf("validator not eligible for this slot")
+		}
+
+		rec := vs.FindRecord(block.Header.Validator)
+		if rec != nil && rec.PublicKey != "" {
+			if !chain.VerifyBlockSignature(block, rec.PublicKey) {
+				return fmt.Errorf("invalid block signature")
+			}
+		}
+	}
+
 	return chain.ApplyBlock(p.db, p.state, block)
 }
 
 func (p *Host) handleSyncStream(s network.Stream) {
 	defer s.Close()
+	s.SetDeadline(time.Now().Add(30 * time.Second))
 	enc := json.NewEncoder(s)
 	dec := json.NewDecoder(s)
 
@@ -414,7 +530,9 @@ func (p *Host) handleSyncStream(s network.Stream) {
 		return
 	}
 
-	for {
+	maxRequests := 500
+	for reqCount := 0; reqCount < maxRequests; reqCount++ {
+		s.SetDeadline(time.Now().Add(10 * time.Second))
 		if err := dec.Decode(&env); err != nil {
 			return
 		}
@@ -536,6 +654,11 @@ func (p *Host) SyncFromPeer(pid peer.ID, fromHeight, toHeight uint64) error {
 	})
 
 	current := fromHeight + 1
+	if fromHeight == 0 {
+		if _, err := p.db.GetBlockByHeight(0); err != nil {
+			current = 0
+		}
+	}
 	for current <= toHeight {
 		batchEnd := current + MaxSyncBatch - 1
 		if batchEnd > toHeight {
@@ -592,7 +715,7 @@ func (p *Host) SyncFromPeer(pid peer.ID, fromHeight, toHeight uint64) error {
 				return fmt.Errorf("apply block %d: %w", current, err)
 			}
 
-			fmt.Printf("[SYNC] Applied block #%d\n", current)
+			log.Debug("sync applied block", "height", current)
 			current++
 		}
 	}
@@ -600,17 +723,17 @@ func (p *Host) SyncFromPeer(pid peer.ID, fromHeight, toHeight uint64) error {
 	return nil
 }
 
-func loadOrCreateKey(path string) (crypto.PrivKey, error) {
+func loadOrCreateKey(path string) (libcrypto.PrivKey, error) {
 	if data, err := os.ReadFile(path); err == nil {
-		return crypto.UnmarshalPrivateKey(data)
+		return libcrypto.UnmarshalPrivateKey(data)
 	}
 
-	priv, _, err := crypto.GenerateEd25519Key(rand.Reader)
+	priv, _, err := libcrypto.GenerateEd25519Key(rand.Reader)
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := crypto.MarshalPrivateKey(priv)
+	data, err := libcrypto.MarshalPrivateKey(priv)
 	if err != nil {
 		return nil, err
 	}
@@ -625,4 +748,39 @@ func loadOrCreateKey(path string) (crypto.PrivKey, error) {
 func mustMarshal(v any) json.RawMessage {
 	data, _ := json.Marshal(v)
 	return data
+}
+
+func (p *Host) checkDoubleSign(block *types.Block) {
+	existing, err := p.db.GetBlockByHeight(block.Header.Height)
+	if err != nil {
+		return
+	}
+	if existing.Header.Validator != block.Header.Validator {
+		return
+	}
+	if existing.Header.Hash == block.Header.Hash {
+		return
+	}
+	if existing.Header.Signature == "" || block.Header.Signature == "" {
+		return
+	}
+
+	evidence := struct {
+		Header1 types.BlockHeader `json:"header1"`
+		Header2 types.BlockHeader `json:"header2"`
+	}{existing.Header, block.Header}
+	payload, _ := json.Marshal(evidence)
+
+	slashTx := types.Transaction{
+		Type:      types.TxSlashEvidence,
+		From:      "",
+		Amount:    block.Header.Height,
+		Payload:   payload,
+		Timestamp: time.Now().Unix(),
+	}
+	slashTx.Hash = wcrypto.SHA256Hex([]byte(fmt.Sprintf("slash:%s:%d", block.Header.Validator, block.Header.Height)))
+
+	log.Warn("double sign detected", "validator", block.Header.Validator[:10], "height", block.Header.Height)
+
+	p.mempool.Add(slashTx)
 }

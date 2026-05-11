@@ -1,7 +1,6 @@
 package amm
 
 import (
-	"fmt"
 	"math/big"
 )
 
@@ -22,14 +21,4 @@ func GetAmountOut(amountIn, reserveIn, reserveOut *big.Int) (amountOut *big.Int,
 
 	amountOut = new(big.Int).Div(numerator, denominator)
 	return amountOut, fee
-}
-
-func SpotPrice(whiteReserve, blueReserve uint64) string {
-	if blueReserve == 0 {
-		return "0"
-	}
-	w := new(big.Float).SetUint64(whiteReserve)
-	b := new(big.Float).SetUint64(blueReserve)
-	price := new(big.Float).Quo(w, b)
-	return fmt.Sprintf("%.6f", price)
 }

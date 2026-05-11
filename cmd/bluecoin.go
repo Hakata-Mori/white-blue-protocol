@@ -70,6 +70,7 @@ var bluecoinDeployCmd = &cobra.Command{
 			Amount:    0,
 			Fee:       types.CalcFee(params.InitWhite),
 			Nonce:     account.Nonce + 1,
+			PublicKey: kp.PublicKey,
 			Payload:   payload,
 			Timestamp: time.Now().Unix(),
 		}
@@ -160,6 +161,46 @@ var bluecoinInfoCmd = &cobra.Command{
 	},
 }
 
+var bluecoinBurnCmd = &cobra.Command{
+	Use:   "burn",
+	Short: "Burn (destroy) blue coins permanently",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fromAddr, _ := cmd.Flags().GetString("from")
+		tokenID, _ := cmd.Flags().GetString("token")
+		amount, _ := cmd.Flags().GetFloat64("amount")
+		if fromAddr == "" || tokenID == "" || amount <= 0 {
+			return fmt.Errorf("--from, --token, and --amount are required")
+		}
+
+		kp, err := loadWalletByAddress(fromAddr)
+		if err != nil {
+			return err
+		}
+
+		nonce, err := getAccountNonce(kp.Address)
+		if err != nil {
+			return err
+		}
+
+		tx := types.Transaction{
+			Type:      types.TxBlueBurn,
+			From:      kp.Address,
+			TokenID:   tokenID,
+			Amount:    uint64(amount * 1_000_000),
+			Nonce:     nonce + 1,
+			PublicKey: kp.PublicKey,
+			Timestamp: time.Now().Unix(),
+		}
+
+		if err := signAndSubmit(&tx, kp.PrivateKey); err != nil {
+			return err
+		}
+
+		fmt.Printf("Burned %.6f blue coins (token %s)\n", amount, tokenID)
+		return nil
+	},
+}
+
 func init() {
 	bluecoinDeployCmd.Flags().StringVar(&bcFrom, "from", "", "Deployer address")
 	bluecoinDeployCmd.Flags().StringVar(&bcName, "name", "", "Coin name")
@@ -171,8 +212,13 @@ func init() {
 	bluecoinDeployCmd.Flags().StringVar(&bcMultiSig, "multisig", "", "Team fund recipient address")
 	bluecoinDeployCmd.Flags().StringVar(&bcURL, "url", "", "Project URL")
 
+	bluecoinBurnCmd.Flags().String("from", "", "Address holding the blue coins")
+	bluecoinBurnCmd.Flags().String("token", "", "Token ID to burn")
+	bluecoinBurnCmd.Flags().Float64("amount", 0, "Amount to burn")
+
 	bluecoinCmd.AddCommand(bluecoinDeployCmd)
 	bluecoinCmd.AddCommand(bluecoinListCmd)
 	bluecoinCmd.AddCommand(bluecoinInfoCmd)
+	bluecoinCmd.AddCommand(bluecoinBurnCmd)
 	rootCmd.AddCommand(bluecoinCmd)
 }

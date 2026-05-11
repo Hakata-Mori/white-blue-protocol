@@ -12,6 +12,10 @@ func (d *DB) SaveAccount(account *types.Account) error {
 	return d.Put(bucketAccounts, []byte(account.Address), account)
 }
 
+func SaveAccountInTx(btx *bolt.Tx, account *types.Account) error {
+	return PutInTx(btx, bucketAccounts, []byte(account.Address), account)
+}
+
 func (d *DB) GetAccount(address string) (*types.Account, error) {
 	var account types.Account
 	err := d.Get(bucketAccounts, []byte(address), &account)
@@ -21,8 +25,30 @@ func (d *DB) GetAccount(address string) (*types.Account, error) {
 	return &account, nil
 }
 
+func GetAccountInTx(btx *bolt.Tx, address string) (*types.Account, error) {
+	var account types.Account
+	if err := GetInTx(btx, bucketAccounts, []byte(address), &account); err != nil {
+		return nil, err
+	}
+	return &account, nil
+}
+
 func (d *DB) GetOrCreateAccount(address string) *types.Account {
 	account, err := d.GetAccount(address)
+	if err != nil {
+		return &types.Account{
+			Address:      address,
+			BlueBalances: make(map[string]uint64),
+		}
+	}
+	if account.BlueBalances == nil {
+		account.BlueBalances = make(map[string]uint64)
+	}
+	return account
+}
+
+func GetOrCreateAccountInTx(btx *bolt.Tx, address string) *types.Account {
+	account, err := GetAccountInTx(btx, address)
 	if err != nil {
 		return &types.Account{
 			Address:      address,
@@ -47,16 +73,32 @@ func (d *DB) GetTotalMinted() uint64 {
 	return minted
 }
 
+func GetTotalMintedInTx(btx *bolt.Tx) uint64 {
+	data := btx.Bucket(bucketMeta).Get([]byte("total_minted"))
+	if data == nil {
+		return 0
+	}
+	return binary.BigEndian.Uint64(data)
+}
+
 func (d *DB) SetTotalMinted(minted uint64) error {
 	return d.db.Update(func(tx *bolt.Tx) error {
-		data := make([]byte, 8)
-		binary.BigEndian.PutUint64(data, minted)
-		return tx.Bucket(bucketMeta).Put([]byte("total_minted"), data)
+		return SetTotalMintedInTx(tx, minted)
 	})
+}
+
+func SetTotalMintedInTx(btx *bolt.Tx, minted uint64) error {
+	data := make([]byte, 8)
+	binary.BigEndian.PutUint64(data, minted)
+	return btx.Bucket(bucketMeta).Put([]byte("total_minted"), data)
 }
 
 func (d *DB) SavePool(pool *types.AMMPool) error {
 	return d.Put(bucketPools, []byte(pool.TokenID), pool)
+}
+
+func SavePoolInTx(btx *bolt.Tx, pool *types.AMMPool) error {
+	return PutInTx(btx, bucketPools, []byte(pool.TokenID), pool)
 }
 
 func (d *DB) GetPool(tokenID string) (*types.AMMPool, error) {
@@ -68,8 +110,20 @@ func (d *DB) GetPool(tokenID string) (*types.AMMPool, error) {
 	return &pool, nil
 }
 
+func GetPoolInTx(btx *bolt.Tx, tokenID string) (*types.AMMPool, error) {
+	var pool types.AMMPool
+	if err := GetInTx(btx, bucketPools, []byte(tokenID), &pool); err != nil {
+		return nil, err
+	}
+	return &pool, nil
+}
+
 func (d *DB) SaveBlueCoinConfig(config *types.BlueCoinConfig) error {
 	return d.Put(bucketBlueConfigs, []byte(config.TokenID), config)
+}
+
+func SaveBlueCoinConfigInTx(btx *bolt.Tx, config *types.BlueCoinConfig) error {
+	return PutInTx(btx, bucketBlueConfigs, []byte(config.TokenID), config)
 }
 
 func (d *DB) GetBlueCoinConfig(tokenID string) (*types.BlueCoinConfig, error) {
@@ -81,14 +135,34 @@ func (d *DB) GetBlueCoinConfig(tokenID string) (*types.BlueCoinConfig, error) {
 	return &config, nil
 }
 
+func GetBlueCoinConfigInTx(btx *bolt.Tx, tokenID string) (*types.BlueCoinConfig, error) {
+	var config types.BlueCoinConfig
+	if err := GetInTx(btx, bucketBlueConfigs, []byte(tokenID), &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
 func (d *DB) SaveBlueCoinState(state *types.BlueCoinState) error {
 	return d.Put(bucketBlueStates, []byte(state.TokenID), state)
+}
+
+func SaveBlueCoinStateInTx(btx *bolt.Tx, state *types.BlueCoinState) error {
+	return PutInTx(btx, bucketBlueStates, []byte(state.TokenID), state)
 }
 
 func (d *DB) GetBlueCoinState(tokenID string) (*types.BlueCoinState, error) {
 	var state types.BlueCoinState
 	err := d.Get(bucketBlueStates, []byte(tokenID), &state)
 	if err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func GetBlueCoinStateInTx(btx *bolt.Tx, tokenID string) (*types.BlueCoinState, error) {
+	var state types.BlueCoinState
+	if err := GetInTx(btx, bucketBlueStates, []byte(tokenID), &state); err != nil {
 		return nil, err
 	}
 	return &state, nil
@@ -108,4 +182,35 @@ func (d *DB) ListBlueCoins() ([]*types.BlueCoinConfig, error) {
 		})
 	})
 	return configs, err
+}
+
+func ListBlueCoinsInTx(btx *bolt.Tx) ([]*types.BlueCoinConfig, error) {
+	var configs []*types.BlueCoinConfig
+	b := btx.Bucket(bucketBlueConfigs)
+	err := b.ForEach(func(k, v []byte) error {
+		var config types.BlueCoinConfig
+		if err := json.Unmarshal(v, &config); err != nil {
+			return err
+		}
+		configs = append(configs, &config)
+		return nil
+	})
+	return configs, err
+}
+
+func (d *DB) SaveReceipt(receipt *types.TxReceipt) error {
+	return d.Put(bucketReceipts, []byte(receipt.TxHash), receipt)
+}
+
+func SaveReceiptInTx(btx *bolt.Tx, receipt *types.TxReceipt) error {
+	return PutInTx(btx, bucketReceipts, []byte(receipt.TxHash), receipt)
+}
+
+func (d *DB) GetReceipt(txHash string) (*types.TxReceipt, error) {
+	var receipt types.TxReceipt
+	err := d.Get(bucketReceipts, []byte(txHash), &receipt)
+	if err != nil {
+		return nil, err
+	}
+	return &receipt, nil
 }

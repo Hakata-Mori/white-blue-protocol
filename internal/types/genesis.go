@@ -20,7 +20,6 @@ func CalcFee(amount uint64) uint64 {
 }
 
 type GenesisConfig struct {
-	ChainID          string            `json:"chainId"`
-	GenesisValidator string            `json:"genesisValidator"`
-	InitialBalances  map[string]uint64 `json:"initialBalances"`
+	ChainID          string `json:"chainId"`
+	GenesisValidator string `json:"genesisValidator"`
 }

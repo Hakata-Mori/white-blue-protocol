@@ -2,12 +2,15 @@ package crypto
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 )
+
+var halfOrder = new(big.Int).Rsh(elliptic.P256().Params().N, 1)
 
 func Sign(privateKeyHex string, data []byte) (string, error) {
 	privKey, err := PrivateKeyFromHex(privateKeyHex)
@@ -19,6 +22,10 @@ func Sign(privateKeyHex string, data []byte) (string, error) {
 	r, s, err := ecdsa.Sign(rand.Reader, privKey, hash[:])
 	if err != nil {
 		return "", err
+	}
+
+	if s.Cmp(halfOrder) > 0 {
+		s.Sub(elliptic.P256().Params().N, s)
 	}
 
 	rBytes := r.Bytes()
@@ -47,6 +54,10 @@ func Verify(publicKeyHex string, data []byte, signatureHex string) (bool, error)
 
 	r := new(big.Int).SetBytes(sigBytes[:32])
 	s := new(big.Int).SetBytes(sigBytes[32:])
+
+	if s.Cmp(halfOrder) > 0 {
+		return false, fmt.Errorf("non-canonical signature: s > N/2")
+	}
 
 	hash := sha256.Sum256(data)
 	return ecdsa.Verify(pubKey, hash[:], r, s), nil

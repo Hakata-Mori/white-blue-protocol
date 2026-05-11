@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	wcrypto "github.com/white-blue-protocol/wblue/internal/crypto"
+	"github.com/white-blue-protocol/wblue/internal/keystore"
 	"github.com/white-blue-protocol/wblue/internal/types"
 )
 
@@ -31,16 +32,31 @@ var walletCreateCmd = &cobra.Command{
 			return err
 		}
 
-		walletFile := filepath.Join(walletDir, kp.Address+".json")
-		data, _ := json.MarshalIndent(kp, "", "  ")
-		if err := os.WriteFile(walletFile, data, 0600); err != nil {
+		password, err := readPassword("Enter password for new wallet: ")
+		if err != nil {
+			return err
+		}
+		confirm, err := readPassword("Confirm password: ")
+		if err != nil {
+			return err
+		}
+		if password != confirm {
+			return fmt.Errorf("passwords do not match")
+		}
+
+		ks, err := keystore.Encrypt(kp.PrivateKey, kp.PublicKey, kp.Address, password)
+		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Address:     %s\n", kp.Address)
-		fmt.Printf("Public Key:  %s\n", kp.PublicKey)
-		fmt.Printf("Private Key: %s\n", kp.PrivateKey)
-		fmt.Printf("Saved to:    %s\n", walletFile)
+		walletFile := filepath.Join(walletDir, kp.Address+".json")
+		if err := keystore.Save(ks, walletFile); err != nil {
+			return err
+		}
+
+		fmt.Printf("Address:    %s\n", kp.Address)
+		fmt.Printf("Public Key: %s\n", kp.PublicKey)
+		fmt.Printf("Saved to:   %s\n", walletFile)
 		return nil
 	},
 }
@@ -58,13 +74,9 @@ var walletListCmd = &cobra.Command{
 
 		for _, entry := range entries {
 			if filepath.Ext(entry.Name()) == ".json" {
-				data, err := os.ReadFile(filepath.Join(walletDir, entry.Name()))
-				if err != nil {
-					continue
-				}
-				var kp types.KeyPair
-				json.Unmarshal(data, &kp)
-				fmt.Printf("%s\n", kp.Address)
+				name := entry.Name()
+				addr := name[:len(name)-5]
+				fmt.Println(addr)
 			}
 		}
 		return nil

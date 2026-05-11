@@ -2,12 +2,13 @@ package p2p
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+
+	"github.com/white-blue-protocol/wblue/internal/log"
 )
 
 const mdnsServiceTag = "wblue-discovery"
@@ -24,9 +25,9 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := n.h.Connect(ctx, pi); err != nil {
-		fmt.Printf("[P2P] Failed to connect to discovered peer %s: %v\n", pi.ID.String()[:12], err)
+		log.Debug("failed to connect to discovered peer", "peer", pi.ID.String()[:12], "err", err)
 	} else {
-		fmt.Printf("[P2P] Connected to peer %s via mDNS\n", pi.ID.String()[:12])
+		log.Info("connected to peer via mdns", "peer", pi.ID.String()[:12])
 	}
 }
 
@@ -40,7 +41,7 @@ func dialSeeds(ctx context.Context, h host.Host, seeds []string) {
 		go func(addr string) {
 			ma, err := peer.AddrInfoFromString(addr)
 			if err != nil {
-				fmt.Printf("[P2P] Invalid seed address %s: %v\n", addr, err)
+				log.Warn("invalid seed address", "addr", addr, "err", err)
 				return
 			}
 
@@ -49,10 +50,10 @@ func dialSeeds(ctx context.Context, h host.Host, seeds []string) {
 				err := h.Connect(connCtx, *ma)
 				cancel()
 				if err == nil {
-					fmt.Printf("[P2P] Connected to seed %s\n", ma.ID.String()[:12])
+					log.Info("connected to seed", "peer", ma.ID.String()[:12])
 					return
 				}
-				fmt.Printf("[P2P] Seed connection attempt %d/5 to %s failed: %v\n", attempt, ma.ID.String()[:12], err)
+				log.Debug("seed connection failed", "attempt", attempt, "peer", ma.ID.String()[:12], "err", err)
 				time.Sleep(time.Duration(attempt) * 2 * time.Second)
 			}
 		}(seed)

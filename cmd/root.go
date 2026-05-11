@@ -8,8 +8,12 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/white-blue-protocol/wblue/internal/config"
 	wcrypto "github.com/white-blue-protocol/wblue/internal/crypto"
+	"github.com/white-blue-protocol/wblue/internal/keystore"
 	"github.com/white-blue-protocol/wblue/internal/node"
+	"github.com/white-blue-protocol/wblue/internal/types"
+	"github.com/white-blue-protocol/wblue/internal/version"
 )
 
 var (
@@ -22,6 +26,9 @@ var (
 	seeds       []string
 	noP2P       bool
 	enableMDNS  bool
+	valPassword string
+	devMode     bool
+	chainID     string
 )
 
 var rootCmd = &cobra.Command{
@@ -29,40 +36,96 @@ var rootCmd = &cobra.Command{
 	Short: "White & Blue Protocol node",
 }
 
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print version information",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(version.String())
+	},
+}
+
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the node",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if devMode {
+			types.SetDevMode()
+			fmt.Println("*** DEV MODE: accelerated timing ***")
+		}
+
+		fileCfg := config.LoadOrDefault(dataDir)
+
+		effectiveChainID := fileCfg.ChainID
+		if cmd.Flags().Changed("chain-id") {
+			effectiveChainID = chainID
+		}
+		if effectiveChainID == "" {
+			effectiveChainID = config.DefaultConfig.ChainID
+		}
+
 		isValidator := !noValidator
 
-		if isValidator && validator == "" {
-			kp, err := wcrypto.GenerateKeyPair()
-			if err != nil {
-				return err
+		var validatorKey, validatorPub string
+
+		if isValidator {
+			if validator == "" {
+				kp, err := wcrypto.GenerateKeyPair()
+				if err != nil {
+					return err
+				}
+				validator = kp.Address
+				validatorKey = kp.PrivateKey
+				validatorPub = kp.PublicKey
+
+				password := valPassword
+				if password == "" {
+					password = os.Getenv("WBLUE_VALIDATOR_PASSWORD")
+				}
+				if password == "" {
+					var err error
+					password, err = readPassword("Set password for validator wallet: ")
+					if err != nil {
+						return err
+					}
+				}
+
+				walletDir := filepath.Join(dataDir, "wallets")
+				os.MkdirAll(walletDir, 0755)
+				walletFile := filepath.Join(walletDir, kp.Address+".json")
+
+				ks, err := keystore.Encrypt(kp.PrivateKey, kp.PublicKey, kp.Address, password)
+				if err != nil {
+					return err
+				}
+				if err := keystore.Save(ks, walletFile); err != nil {
+					return err
+				}
+
+				fmt.Printf("Generated validator address: %s\n", kp.Address)
+				fmt.Println("(Saved to encrypted wallet file)")
+				fmt.Println()
+			} else {
+				kp, err := loadWalletByAddress(validator)
+				if err != nil {
+					return fmt.Errorf("load validator wallet: %w", err)
+				}
+				validatorKey = kp.PrivateKey
+				validatorPub = kp.PublicKey
 			}
-			validator = kp.Address
-
-			walletDir := filepath.Join(dataDir, "wallets")
-			os.MkdirAll(walletDir, 0755)
-			walletFile := filepath.Join(walletDir, kp.Address+".json")
-			data := fmt.Sprintf(`{"privateKey":"%s","publicKey":"%s","address":"%s"}`, kp.PrivateKey, kp.PublicKey, kp.Address)
-			os.WriteFile(walletFile, []byte(data), 0600)
-
-			fmt.Printf("Generated validator address: %s\n", kp.Address)
-			fmt.Printf("Private key: %s\n", kp.PrivateKey)
-			fmt.Println("(Saved to wallet file)")
-			fmt.Println()
 		}
 
 		cfg := node.Config{
-			DataDir:     dataDir,
-			Validator:   validator,
-			APIPort:     apiPort,
-			IsValidator: isValidator,
-			P2PEnabled:  !noP2P,
-			P2PPort:     p2pPort,
-			P2PSeeds:    seeds,
-			P2PMDNS:     enableMDNS,
+			DataDir:      dataDir,
+			Validator:    validator,
+			ValidatorKey: validatorKey,
+			ValidatorPub: validatorPub,
+			APIPort:      apiPort,
+			IsValidator:  isValidator,
+			P2PEnabled:   !noP2P,
+			P2PPort:      p2pPort,
+			P2PSeeds:     seeds,
+			P2PMDNS:      enableMDNS,
+			ChainID:      effectiveChainID,
 		}
 
 		n, err := node.NewNode(cfg)
@@ -97,7 +160,11 @@ func init() {
 	startCmd.Flags().StringArrayVar(&seeds, "seeds", nil, "Seed node multiaddrs")
 	startCmd.Flags().BoolVar(&noP2P, "no-p2p", false, "Disable P2P networking")
 	startCmd.Flags().BoolVar(&enableMDNS, "mdns", true, "Enable mDNS discovery")
+	startCmd.Flags().StringVar(&valPassword, "password", "", "Validator wallet password (or use WBLUE_VALIDATOR_PASSWORD env)")
+	startCmd.Flags().BoolVar(&devMode, "dev", false, "Dev mode: accelerated block timing for testing")
+	startCmd.Flags().StringVar(&chainID, "chain-id", "", "Chain ID (default from config or wblue-mainnet-1)")
 	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(versionCmd)
 }
 
 func Execute() {

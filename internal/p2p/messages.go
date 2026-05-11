@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	MsgTypeBlock   = "block"
-	MsgTypeTx      = "tx"
-	MsgTypeStatus  = "status"
-	MsgTypeSyncReq = "sync_req"
-	MsgTypeSyncRes = "sync_res"
+	MsgTypeBlock     = "block"
+	MsgTypeTx        = "tx"
+	MsgTypeStatus    = "status"
+	MsgTypeSyncReq   = "sync_req"
+	MsgTypeSyncRes   = "sync_res"
+	MsgTypeHeartbeat = "heartbeat"
 )
 
 const EnvelopeVersion = "1"
@@ -65,4 +66,12 @@ func Decode(data []byte) (*Envelope, error) {
 		return nil, err
 	}
 	return &env, nil
+}
+
+type HeartbeatMsg struct {
+	Address   string `json:"address"`
+	PublicKey string `json:"publicKey"`
+	Height    uint64 `json:"height"`
+	Timestamp int64  `json:"timestamp"`
+	Signature string `json:"signature"`
 }

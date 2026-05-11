@@ -8,6 +8,7 @@ type BlockHeader struct {
 	Validator  string `json:"validator"`
 	Reward     uint64 `json:"reward"`
 	Hash       string `json:"hash"`
+	Signature  string `json:"signature,omitempty"`
 }
 
 type Block struct {

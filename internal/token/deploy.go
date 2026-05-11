@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 
 	"github.com/white-blue-protocol/wblue/internal/storage"
 	"github.com/white-blue-protocol/wblue/internal/types"
+	bolt "go.etcd.io/bbolt"
 )
 
 type DeployParams struct {
@@ -27,6 +29,16 @@ func GenerateTokenID(creator, name string, nonce uint64) string {
 }
 
 func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64, blockTime int64) (*types.BlueCoinConfig, error) {
+	var config *types.BlueCoinConfig
+	err := db.Update(func(btx *bolt.Tx) error {
+		var e error
+		config, e = DeployInTx(btx, creator, params, nonce, blockTime)
+		return e
+	})
+	return config, err
+}
+
+func DeployInTx(btx *bolt.Tx, creator string, params *DeployParams, nonce uint64, blockTime int64) (*types.BlueCoinConfig, error) {
 	if params.PoolRatio+params.TeamRatio != 100 {
 		return nil, fmt.Errorf("poolRatio + teamRatio must equal 100")
 	}
@@ -39,7 +51,7 @@ func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64, 
 
 	tokenID := GenerateTokenID(creator, params.Name, nonce)
 
-	_, err := db.GetBlueCoinConfig(tokenID)
+	_, err := storage.GetBlueCoinConfigInTx(btx, tokenID)
 	if err == nil {
 		return nil, fmt.Errorf("token already exists")
 	}
@@ -47,8 +59,6 @@ func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64, 
 	totalSupply := uint64(types.BlueCoinFixedSupply)
 	poolAllocation := totalSupply * uint64(params.PoolRatio) / 100
 	teamAllocation := totalSupply * uint64(params.TeamRatio) / 100
-
-	now := blockTime
 
 	config := &types.BlueCoinConfig{
 		TokenID:        tokenID,
@@ -62,7 +72,7 @@ func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64, 
 		ReleaseMonthly: params.ReleaseMonthly,
 		MultiSigAddr:   params.MultiSigAddr,
 		SourceURLs:     params.SourceURLs,
-		DeployedAt:     now,
+		DeployedAt:     blockTime,
 	}
 
 	state := &types.BlueCoinState{
@@ -71,24 +81,29 @@ func Deploy(db *storage.DB, creator string, params *DeployParams, nonce uint64, 
 		PoolAllocation: poolAllocation,
 		TeamLocked:     teamAllocation,
 		TeamReleased:   0,
-		LastUnlockTime: now,
+		LastUnlockTime: blockTime,
 	}
 
-	if err := db.SaveBlueCoinConfig(config); err != nil {
+	if err := storage.SaveBlueCoinConfigInTx(btx, config); err != nil {
 		return nil, err
 	}
-	if err := db.SaveBlueCoinState(state); err != nil {
+	if err := storage.SaveBlueCoinStateInTx(btx, state); err != nil {
 		return nil, err
 	}
+
+	k := new(big.Int).Mul(
+		new(big.Int).SetUint64(params.InitWhite),
+		new(big.Int).SetUint64(poolAllocation),
+	)
 
 	pool := &types.AMMPool{
 		TokenID:      tokenID,
 		WhiteReserve: params.InitWhite,
 		BlueReserve:  poolAllocation,
-		K:            fmt.Sprintf("%d", params.InitWhite*poolAllocation),
-		CreatedAt:    now,
+		K:            k.String(),
+		CreatedAt:    blockTime,
 	}
-	if err := db.SavePool(pool); err != nil {
+	if err := storage.SavePoolInTx(btx, pool); err != nil {
 		return nil, err
 	}
 

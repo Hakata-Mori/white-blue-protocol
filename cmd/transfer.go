@@ -68,6 +68,7 @@ func doTransfer(txType types.TxType, tokenID string) error {
 		TokenID:   tokenID,
 		Fee:       types.CalcFee(amount),
 		Nonce:     account.Nonce + 1,
+		PublicKey: kp.PublicKey,
 		Timestamp: time.Now().Unix(),
 	}
 

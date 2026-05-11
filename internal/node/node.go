@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/white-blue-protocol/wblue/internal/api"
 	"github.com/white-blue-protocol/wblue/internal/chain"
 	"github.com/white-blue-protocol/wblue/internal/consensus"
+	"github.com/white-blue-protocol/wblue/internal/crypto"
+	"github.com/white-blue-protocol/wblue/internal/log"
 	"github.com/white-blue-protocol/wblue/internal/p2p"
 	"github.com/white-blue-protocol/wblue/internal/state"
 	"github.com/white-blue-protocol/wblue/internal/storage"
@@ -16,14 +19,17 @@ import (
 )
 
 type Config struct {
-	DataDir     string
-	Validator   string
-	APIPort     int
-	IsValidator bool
-	P2PEnabled  bool
-	P2PPort     int
-	P2PSeeds    []string
-	P2PMDNS     bool
+	DataDir      string
+	Validator    string
+	ValidatorKey string
+	ValidatorPub string
+	APIPort      int
+	IsValidator  bool
+	P2PEnabled   bool
+	P2PPort      int
+	P2PSeeds     []string
+	P2PMDNS      bool
+	ChainID      string
 }
 
 type Node struct {
@@ -35,6 +41,7 @@ type Node struct {
 	DataDir   string
 	Validator string
 	cfg       Config
+	stopCh    chan struct{}
 }
 
 func NewNode(cfg Config) (*Node, error) {
@@ -50,7 +57,7 @@ func NewNode(cfg Config) (*Node, error) {
 
 	if cfg.IsValidator && db.GetLatestHeight() == 0 && !db.Has([]byte("blocks"), []byte{0, 0, 0, 0, 0, 0, 0, 0}) {
 		genesis := chain.CreateGenesisBlock(&types.GenesisConfig{
-			ChainID:          "wblue-testnet-1",
+			ChainID:          cfg.ChainID,
 			GenesisValidator: cfg.Validator,
 		})
 		if err := db.SaveBlock(genesis); err != nil {
@@ -59,12 +66,27 @@ func NewNode(cfg Config) (*Node, error) {
 
 		account := db.GetOrCreateAccount(cfg.Validator)
 		account.WhiteBalance = types.GenesisPremine
+		account.PublicKey = cfg.ValidatorPub
 		if err := db.SaveAccount(account); err != nil {
 			return nil, fmt.Errorf("save genesis account: %w", err)
 		}
 
-		fmt.Printf("Genesis block created. Validator %s received %d White Coins\n",
-			cfg.Validator[:10]+"...", types.GenesisPremine/1_000_000)
+		log.Info("genesis block created", "validator", truncAddr(cfg.Validator), "premine", types.GenesisPremine/1_000_000)
+
+		vs := &types.ValidatorSet{
+			Validators: []types.ValidatorRecord{{
+				Address:              cfg.Validator,
+				PublicKey:            cfg.ValidatorPub,
+				JoinHeight:           0,
+				FirstHeartbeatHeight: 0,
+				LastHeartbeatHeight:  0,
+				Status:               types.ValidatorStatusActive,
+			}},
+			UpdatedAt: 0,
+		}
+		if err := db.SaveValidatorSet(vs); err != nil {
+			return nil, fmt.Errorf("save validator set: %w", err)
+		}
 	}
 
 	st := state.New(db)
@@ -76,28 +98,27 @@ func NewNode(cfg Config) (*Node, error) {
 		Mempool: mp,
 		DataDir: cfg.DataDir,
 		cfg:     cfg,
+		stopCh:  make(chan struct{}),
 	}
 
 	if cfg.IsValidator {
 		n.Validator = cfg.Validator
-		n.Consensus = consensus.NewPoS(db, st, mp, cfg.Validator)
+		n.Consensus = consensus.NewPoS(db, st, mp, cfg.Validator, cfg.ValidatorKey, cfg.ValidatorPub)
 	}
 
 	return n, nil
 }
 
 func (n *Node) Start() error {
-	fmt.Println("Starting White & Blue Protocol node...")
-	fmt.Printf("Data dir: %s\n", n.DataDir)
+	log.Info("starting node", "dataDir", n.DataDir)
 	if n.cfg.IsValidator {
-		fmt.Printf("Validator: %s\n", n.Validator)
+		log.Info("validator mode", "address", n.Validator)
 	} else {
-		fmt.Println("Mode: full node (non-validator)")
+		log.Info("full node mode")
 	}
-	fmt.Println("Block interval: 15 seconds")
-	fmt.Println("---")
+	log.Info("block interval", "seconds", types.GetBlockInterval())
 
-	apiServer := api.NewServer(n.DB, n.State, n.Mempool, n.cfg.APIPort)
+	apiServer := api.NewServer(n.DB, n.State, n.Mempool, n.cfg.APIPort, n.cfg.ChainID)
 	apiServer.Start()
 
 	if n.cfg.P2PEnabled {
@@ -111,7 +132,7 @@ func (n *Node) Start() error {
 			Seeds:      n.cfg.P2PSeeds,
 			EnableMDNS: n.cfg.P2PMDNS,
 			KeyPath:    filepath.Join(n.DataDir, "node.key"),
-			ChainID:    "wblue-testnet-1",
+			ChainID:    n.cfg.ChainID,
 		}
 
 		ph, err := p2p.New(p2pCfg, n.DB, n.Mempool, n.State, blockCh)
@@ -122,6 +143,11 @@ func (n *Node) Start() error {
 
 		n.Mempool.OnAdd = ph.BroadcastTx
 
+		if n.Consensus != nil {
+			adapter := &hbAdapter{host: ph}
+			n.Consensus.HBProvider = adapter
+		}
+
 		if err := ph.Start(); err != nil {
 			return fmt.Errorf("p2p start: %w", err)
 		}
@@ -131,11 +157,15 @@ func (n *Node) Start() error {
 
 	if n.Consensus != nil {
 		n.Consensus.Start()
+		if n.P2P != nil && n.cfg.ValidatorKey != "" {
+			go n.heartbeatLoop()
+		}
 	}
 	return nil
 }
 
 func (n *Node) Stop() {
+	close(n.stopCh)
 	if n.P2P != nil {
 		n.P2P.Stop()
 	}
@@ -143,6 +173,32 @@ func (n *Node) Stop() {
 		n.Consensus.Stop()
 	}
 	n.DB.Close()
+}
+
+func (n *Node) heartbeatLoop() {
+	interval := time.Duration(types.GetBlockInterval()) * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			height := n.DB.GetLatestHeight()
+			sig, err := crypto.Sign(n.cfg.ValidatorKey, []byte(fmt.Sprintf("hb:%s:%d", n.cfg.Validator, height)))
+			if err != nil {
+				continue
+			}
+			n.P2P.BroadcastHeartbeat(&p2p.HeartbeatMsg{
+				Address:   n.cfg.Validator,
+				PublicKey: n.cfg.ValidatorPub,
+				Height:    height,
+				Timestamp: time.Now().Unix(),
+				Signature: sig,
+			})
+		case <-n.stopCh:
+			return
+		}
+	}
 }
 
 func NewNodeReadOnly(dataDir string) (*Node, error) {
@@ -161,4 +217,44 @@ func NewNodeReadOnly(dataDir string) (*Node, error) {
 		Mempool: mp,
 		DataDir: dataDir,
 	}, nil
+}
+
+func truncAddr(addr string) string {
+	if len(addr) > 10 {
+		return addr[:10] + "..."
+	}
+	return addr
+}
+
+type hbAdapter struct {
+	host *p2p.Host
+}
+
+func (a *hbAdapter) GetPendingHeartbeats() []*consensus.HeartbeatInfo {
+	msgs := a.host.GetPendingHeartbeats()
+	out := make([]*consensus.HeartbeatInfo, len(msgs))
+	for i, m := range msgs {
+		out[i] = &consensus.HeartbeatInfo{
+			Address:   m.Address,
+			PublicKey: m.PublicKey,
+			Height:    m.Height,
+			Timestamp: m.Timestamp,
+			Signature: m.Signature,
+		}
+	}
+	return out
+}
+
+func (a *hbAdapter) ClearHeartbeat(address string) {
+	a.host.ClearHeartbeat(address)
+}
+
+func (a *hbAdapter) BroadcastHeartbeat(hb *consensus.HeartbeatInfo) {
+	a.host.BroadcastHeartbeat(&p2p.HeartbeatMsg{
+		Address:   hb.Address,
+		PublicKey: hb.PublicKey,
+		Height:    hb.Height,
+		Timestamp: hb.Timestamp,
+		Signature: hb.Signature,
+	})
 }

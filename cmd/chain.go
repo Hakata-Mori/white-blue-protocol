@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/spf13/cobra"
+	"github.com/white-blue-protocol/wblue/internal/types"
 )
 
 var chainCmd = &cobra.Command{
@@ -40,7 +41,51 @@ var chainStatusCmd = &cobra.Command{
 	},
 }
 
+var chainTxCmd = &cobra.Command{
+	Use:   "tx [hash]",
+	Short: "Query transaction status",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		txHash := args[0]
+
+		resp, err := http.Get(fmt.Sprintf("%s/api/v1/tx/%s", apiURL, txHash))
+		if err != nil {
+			return fmt.Errorf("node not running? %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 404 {
+			fmt.Println("Transaction not found")
+			return nil
+		}
+
+		var result map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return err
+		}
+
+		if status, ok := result["status"].(string); ok && status == "pending" {
+			fmt.Println("Status: pending (in mempool)")
+			return nil
+		}
+
+		var receipt types.TxReceipt
+		data, _ := json.Marshal(result)
+		json.Unmarshal(data, &receipt)
+
+		fmt.Printf("Tx Hash:     %s\n", receipt.TxHash)
+		fmt.Printf("Status:      %s\n", receipt.Status)
+		fmt.Printf("Block:       %d\n", receipt.BlockHeight)
+		fmt.Printf("Block Hash:  %s\n", receipt.BlockHash)
+		if receipt.Error != "" {
+			fmt.Printf("Error:       %s\n", receipt.Error)
+		}
+		return nil
+	},
+}
+
 func init() {
 	chainCmd.AddCommand(chainStatusCmd)
+	chainCmd.AddCommand(chainTxCmd)
 	rootCmd.AddCommand(chainCmd)
 }

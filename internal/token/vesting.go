@@ -1,23 +1,27 @@
 package token
 
 import (
-	"time"
-
 	"github.com/white-blue-protocol/wblue/internal/storage"
-	"github.com/white-blue-protocol/wblue/internal/types"
+	bolt "go.etcd.io/bbolt"
 )
 
 const SecondsPerMonth = 30 * 24 * 3600
 
 func ProcessVesting(db *storage.DB, blockTime int64) error {
-	configs, err := db.ListBlueCoins()
+	return db.Update(func(btx *bolt.Tx) error {
+		return ProcessVestingInTx(btx, blockTime)
+	})
+}
+
+func ProcessVestingInTx(btx *bolt.Tx, blockTime int64) error {
+	configs, err := storage.ListBlueCoinsInTx(btx)
 	if err != nil {
 		return err
 	}
 
 	for _, config := range configs {
-		state, err := db.GetBlueCoinState(config.TokenID)
-		if err != nil || state == nil {
+		state, err := storage.GetBlueCoinStateInTx(btx, config.TokenID)
+		if err != nil {
 			continue
 		}
 
@@ -44,18 +48,18 @@ func ProcessVesting(db *storage.DB, blockTime int64) error {
 			state.TeamLocked -= unlock
 			state.TeamReleased += unlock
 
-			account := db.GetOrCreateAccount(config.MultiSigAddr)
+			account := storage.GetOrCreateAccountInTx(btx, config.MultiSigAddr)
 			account.BlueBalances[config.TokenID] += unlock
-			db.SaveAccount(account)
+			if err := storage.SaveAccountInTx(btx, account); err != nil {
+				return err
+			}
 		}
 
 		state.LastUnlockTime = blockTime - (elapsed % SecondsPerMonth)
-		db.SaveBlueCoinState(state)
+		if err := storage.SaveBlueCoinStateInTx(btx, state); err != nil {
+			return err
+		}
 	}
 
 	return nil
-}
-
-func GetNextUnlockTime(state *types.BlueCoinState) time.Time {
-	return time.Unix(state.LastUnlockTime+SecondsPerMonth, 0)
 }

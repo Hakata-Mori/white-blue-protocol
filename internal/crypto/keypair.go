@@ -18,6 +18,11 @@ func GenerateKeyPair() (*types.KeyPair, error) {
 	}
 
 	privBytes := privateKey.D.Bytes()
+	if len(privBytes) < 32 {
+		padded := make([]byte, 32)
+		copy(padded[32-len(privBytes):], privBytes)
+		privBytes = padded
+	}
 	pubBytes := elliptic.MarshalCompressed(privateKey.PublicKey.Curve, privateKey.PublicKey.X, privateKey.PublicKey.Y)
 
 	address := PubKeyToAddress(pubBytes)
