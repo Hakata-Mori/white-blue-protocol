@@ -3,8 +3,6 @@ import { useParams } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch';
 import { getBlueCoin, getBlueCoinState } from '../api/bluecoin';
 import { getPool } from '../api/pool';
-import { MICRO } from '../config';
-import { formatAmount } from '../utils/format';
 import type { BlueCoinConfig, BlueCoinState, AMMPool } from '../types';
 import AddressLink from '../components/ui/AddressLink';
 import Amount from '../components/ui/Amount';

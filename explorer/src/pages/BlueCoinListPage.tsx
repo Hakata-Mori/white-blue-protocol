@@ -4,7 +4,6 @@ import { useFetch } from '../hooks/useFetch';
 import { getBlueCoins, getBlueCoinState } from '../api/bluecoin';
 import { getPool } from '../api/pool';
 import { MICRO } from '../config';
-import { formatAmount } from '../utils/format';
 import type { BlueCoinConfig, BlueCoinState, AMMPool } from '../types';
 import AddressLink from '../components/ui/AddressLink';
 import Amount from '../components/ui/Amount';
