@@ -122,3 +122,21 @@ export interface NetworkStats {
   avgBlockTime: number;
   chainId: string;
 }
+
+export interface TxSummary {
+  hash: string;
+  type: number;
+  from: string;
+  to: string;
+  amount: number;
+  fee: number;
+  tokenId?: string;
+  blockHeight: number;
+  timestamp: number;
+  status: string;
+}
+
+export interface AddressTxsResponse {
+  txs: TxSummary[];
+  total: number;
+}

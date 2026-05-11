@@ -1,21 +1,40 @@
 import { useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch';
-import { getWallet } from '../api/wallet';
+import { getWallet, getAddressTxs } from '../api/wallet';
+import { TXS_PER_PAGE } from '../config';
 import HashDisplay from '../components/ui/HashDisplay';
+import AddressLink from '../components/ui/AddressLink';
 import Amount from '../components/ui/Amount';
+import TxTypeLabel from '../components/ui/TxTypeLabel';
+import Badge from '../components/ui/Badge';
+import Timestamp from '../components/ui/Timestamp';
+import Pagination from '../components/ui/Pagination';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { formatHash } from '../utils/format';
 
 export default function AddressPage() {
   const { address } = useParams<{ address: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
+  const offset = (page - 1) * TXS_PER_PAGE;
 
-  const fetcher = useCallback(
+  const walletFetcher = useCallback(
     () => getWallet(address!),
     [address]
   );
 
-  const { data: account, loading, error } = useFetch(fetcher);
+  const txsFetcher = useCallback(
+    () => getAddressTxs(address!, TXS_PER_PAGE, offset),
+    [address, offset]
+  );
+
+  const { data: account, loading, error } = useFetch(walletFetcher);
+  const { data: txsData, loading: txsLoading } = useFetch(txsFetcher);
+
+  const handlePageChange = (newPage: number) => {
+    setSearchParams({ page: String(newPage) });
+  };
 
   if (loading && !account) {
     return <LoadingSpinner />;
@@ -33,6 +52,21 @@ export default function AddressPage() {
 
   const blueEntries = Object.entries(display.blueBalances);
   const hasBlue = blueEntries.length > 0;
+  const txs = txsData?.txs ?? [];
+  const totalTxs = txsData?.total ?? 0;
+
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case 'success':
+        return <Badge label={status} className="bg-green-900 text-green-300" />;
+      case 'failed':
+        return <Badge label={status} className="bg-red-900 text-red-300" />;
+      case 'pending':
+        return <Badge label={status} className="bg-yellow-900 text-yellow-300" />;
+      default:
+        return <Badge label={status} />;
+    }
+  };
 
   return (
     <div>
@@ -104,8 +138,74 @@ export default function AddressPage() {
         </div>
       )}
 
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 text-center">
-        <span className="text-gray-400">Transaction history coming soon</span>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Transaction History</h2>
+          <span className="text-gray-400 text-sm">Total: {totalTxs.toLocaleString()}</span>
+        </div>
+
+        {txsLoading && !txsData ? (
+          <LoadingSpinner />
+        ) : (
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-gray-400 text-sm text-left">
+                  <th className="pb-3 pr-4">Hash</th>
+                  <th className="pb-3 pr-4">Type</th>
+                  <th className="pb-3 pr-4">From</th>
+                  <th className="pb-3 pr-4">To</th>
+                  <th className="pb-3 pr-4">Amount</th>
+                  <th className="pb-3 pr-4">Block</th>
+                  <th className="pb-3 pr-4">Time</th>
+                  <th className="pb-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/50">
+                {txs.map((tx) => (
+                  <tr key={tx.hash}>
+                    <td className="py-3 pr-4">
+                      <HashDisplay hash={tx.hash} truncate link={`/tx/${tx.hash}`} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <TxTypeLabel type={tx.type} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <AddressLink address={tx.from} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <AddressLink address={tx.to} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <Amount value={tx.amount} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <Link
+                        to={`/block/${tx.blockHeight}`}
+                        className="text-blue-400 hover:text-blue-300 font-mono"
+                      >
+                        {tx.blockHeight.toLocaleString()}
+                      </Link>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <Timestamp value={tx.timestamp} />
+                    </td>
+                    <td className="py-3">
+                      {statusBadge(tx.status)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <Pagination
+          current={page}
+          total={totalTxs}
+          perPage={TXS_PER_PAGE}
+          onChange={handlePageChange}
+        />
       </div>
     </div>
   );

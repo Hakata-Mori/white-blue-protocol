@@ -17,6 +17,8 @@ var (
 	bucketBlueStates  = []byte("blue_states")
 	bucketMeta        = []byte("meta")
 	bucketReceipts    = []byte("receipts")
+	bucketAddrTxs     = []byte("addr_txs")
+	bucketAddrTxCount = []byte("addr_tx_count")
 )
 
 type DB struct {
@@ -35,6 +37,7 @@ func Open(path string) (*DB, error) {
 			bucketAccounts, bucketPools, bucketBlueConfigs,
 			bucketBlueStates, bucketMeta, bucketReceipts,
 			bucketValidators, bucketMultiSig, bucketMSProps,
+			bucketAddrTxs, bucketAddrTxCount,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists(b); err != nil {

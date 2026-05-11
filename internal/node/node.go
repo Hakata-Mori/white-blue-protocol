@@ -107,6 +107,15 @@ func NewNode(cfg Config) (*Node, error) {
 	st := state.New(db)
 	mp := txpool.New()
 
+	if db.NeedAddrTxIndex() {
+		log.Info("rebuilding address transaction index...")
+		if err := db.RebuildAddrTxIndex(); err != nil {
+			log.Error("failed to rebuild addr tx index", "err", err)
+		} else {
+			log.Info("address transaction index rebuilt")
+		}
+	}
+
 	n := &Node{
 		DB:      db,
 		State:   st,

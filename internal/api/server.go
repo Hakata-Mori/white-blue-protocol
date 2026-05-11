@@ -179,6 +179,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/tx/", wrap(s.handleGetTx))
 	mux.HandleFunc("/api/v1/validators", wrap(s.handleValidators))
 	mux.HandleFunc("/api/v1/multisig/", wrap(s.handleMultiSig))
+	mux.HandleFunc("/api/v1/address/", wrap(s.handleAddressTxs))
 	mux.HandleFunc("/api/v1/faucet", wrapSubmit(s.handleFaucet))
 
 	addr := fmt.Sprintf(":%d", s.port)
@@ -548,4 +549,33 @@ func (s *Server) handleMultiSig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, ms)
+}
+
+func (s *Server) handleAddressTxs(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/address/")
+	if !strings.HasSuffix(path, "/txs") {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	address := strings.TrimSuffix(path, "/txs")
+	if !isValidAddress(address) {
+		http.Error(w, "invalid address format", http.StatusBadRequest)
+		return
+	}
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	result, err := s.db.GetAddressTxs(address, offset, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, result)
 }

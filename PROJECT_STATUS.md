@@ -1,114 +1,187 @@
-# White-Blue Protocol 项目总结
+# White-Blue Protocol 项目状态
 
 ## 项目概述
 
-一条专为企业发币而生的区块链。白皮书：~/white_blue_protocol_whitepaper.pdf（PDF 需用 pypdf 读取）。
+一条专为企业发币而生的区块链。任何人可以通过购买企业蓝币来"投资"任何组织。
 
-**仓库**：/Users/guoyixuan03/white-blue-protocol
-**远程**：https://github.com/Hataka-Mori/white-blue-protocol.git (main 分支)
+- **仓库**: https://github.com/Hataka-Mori/white-blue-protocol
+- **测试网**: http://8.217.52.231 (阿里云香港)
+- **Chain ID**: `wblue-testnet-1`
 
 ---
 
 ## 核心概念
 
-- **白币 (White Coin, WC)**：链原生货币，PoS 出块产生，总量 10 亿，年衰减 10%
-- **蓝币 (Blue Coin)**：企业代币，每种固定 100 万枚，通过独立 AMM 池子(x*y=k)与白币交易
-- **协议哲学**：无运营主体、不触碰法币、不做撮合、规则固定、无治理
+- **白币 (White Coin, WC)**: 链原生货币，PoS 出块产生，总量 10 亿，年衰减 10%
+- **蓝币 (Blue Coin)**: 用户部署的代币，每种固定 100 万枚，通过独立 AMM 池 (x*y=k) 与白币交易
+- **协议哲学**: 无运营主体、不触碰法币、不做撮合、规则固定、无治理
 
 ---
 
-## 当前已完成 (main 分支)
+## 当前状态: Mainnet Beta (已部署)
 
-### 功能模块
-- PoS 共识（单验证者，15s 出块）
-- 白币挖矿（50WC 初始奖励，年衰减 10%）
-- 蓝币发行（deploy + vesting 锁仓释放）
-- AMM 交易（恒定乘积，0.1% 费用销毁）
-- 白币/蓝币转账（手续费 max(0.001WC, 0.1%) 销毁）
-- CLI 全部命令 + HTTP API (7 个端点)
-- P2P 网络（libp2p + GossipSub + mDNS + 区块同步）
-- 非验证者全节点模式 (--no-validator)
-- 可配置端口 (--api-port, --p2p-port, --api-url)
+所有计划中的 12 个升级阶段 (Phase 0 ~ 4C) 均已完成。链运行在阿里云香港服务器上。
 
-### 技术栈
-- Go 1.26 + Cobra CLI + BoltDB + libp2p + GossipSub
-- ECDSA P-256 签名
-- JSON 序列化
+### 已完成功能
 
-### 关键参数
-```
-MaxWhiteSupply  = 1,000,000,000 (10亿)
-BlockInterval   = 15 seconds
-InitialReward   = 50 WC/block
-AnnualDecayRate = 10%
-BlueCoinFixedSupply = 1,000,000/token
-FeeRate         = 0.1% (min 0.001 WC)
-GenesisPremine  = 10,000 WC
-P2P Port        = 30303
-API Port        = 8080
-```
+**基础设施 (Phase 0)**
+- 原子 BoltDB 事务 (ApplyBlock 全部在单个 Bolt Tx 内完成)
+- SafeMath (溢出安全的 uint64 运算)
+- 错误传播 (消除所有吞掉的 error)
+- Nonce 集中化管理
+- Speculative Validation (提交时预检)
+- 交易回执 (Receipt)
+
+**安全性 (Phase 1A/1B)**
+- 强制交易签名验证
+- 区块签名 (出块者 ECDSA 签名)
+- Low-S 规范化 (消除签名可塑性)
+
+**加固 (Phase 2A~2E)**
+- Keystore 加密存储 (scrypt + AES-256-GCM)
+- 交易回执查询 API
+- Mempool known map GC 修复
+- P2P 限流、FloodPublish 移除、私钥不打印
+- 死代码清理、TxVestingUnlock 删除
+
+**多验证者 PoS (Phase 3)**
+- ValidatorSet 管理 (加入/退出/暂停/驱逐)
+- 心跳自证机制
+- Slot 轮转出块
+- 5 种验证者交易类型 (Join/Exit/Evict/Heartbeat/SlashEvidence)
+- 24h + PoW 入场门槛
+
+**经济模型 (Phase 4A~4C + Validator Economics V3)**
+- Swap 滑点保护 (--min-out)
+- 真实多签 N-of-M (含执行)
+- 蓝币转账手续费修复
+- 动态质押: `DynamicStakeAmount = BlockReward × BlocksPerDay ÷ activeCount × StakeDays(1)`，最低 10,000 WC
+- 蓝币 2% swap 销毁 + 手动 TxBlueBurn
+- 验证者出块分润: 50% 交易手续费给出块者
+- 免费加入 (24h 在线 + PoW)，退出销毁质押
+- 双层离线惩罚 (暂停 → 驱逐)，双签永久封禁
+
+**区块浏览器 + 钱包**
+- React + TypeScript + Tailwind CSS + Vite 前端
+- 11 个页面: 首页、区块列表、区块详情、交易详情、地址、蓝币列表、蓝币详情、验证者、钱包、水龙头、404
+- 钱包: 创建/导入 keystore、转账 WC/Blue、Swap (AMM)、部署蓝币
+- 签名: @noble/curves (P-256)，加密: @noble/ciphers (AES-256-GCM)，KDF: scrypt-js
+
+**水龙头**
+- 独立钱包地址 `0xde7a...c37`
+- 每地址每 24h 领取 100 WC
+- BoltDB 持久化冷却记录
+
+**部署 & 运维**
+- 硬编码种子节点 (用户直接 `./wblue start` 即可连接)
+- `--genesis` 隐藏 flag (防止意外创建新链)
+- Config 文件支持、版本嵌入、结构化日志 (slog)
+- API 限流、CORS、输入校验、Mempool TTL/per-addr 限制
+- systemd 服务 + Nginx 反向代理
+- README 四语版本 (English / 中文 / 日本語 / 한국어)
 
 ---
 
-## 下一步：Mainnet Beta 升级 (v2 — 三轮 Review 后)
+## 链上参数
 
-### 详细方案文档位置
-`/Users/guoyixuan03/.takumi/plans/parsed-jumping-handler.md`
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| MaxWhiteSupply | 1,000,000,000 WC | 10 亿 |
+| BlockInterval | 15 秒 | |
+| InitialReward | 50 WC/块 | |
+| AnnualDecayRate | 10% | |
+| FeeRate | 0.1% (min 0.001 WC) | 转账手续费 |
+| BlueCoinFixedSupply | 1,000,000/种 | |
+| BlueBurnRate | 2% | AMM swap 销毁 |
+| GenesisPremine | 10,000 WC | |
+| MinStakeAmount | 10,000 WC | 动态质押下限 |
+| UptimeBlocks | 5,760 (24h) | 入场在线要求 |
+| SuspendBlocks | 5,760 (24h) | 离线暂停阈值 |
+| EvictBlocks | 17,280 (72h) | 驱逐阈值 |
+| PoWDifficulty | 24 bits | 入场 PoW |
+| ConfirmationBlocks | 10 (~2.5 min) | |
 
-### 三轮 Review 关键发现 (38 项)
-- R1: 11 个原始 MVP 问题全部确认
-- R2: 20 项代码级新发现（uint64 溢出、AMM K 不验证、内存安全、P2P DoS 等）
-- R3: 18 项设计级新发现（slot 偷槽、无 fork choice、验证者集排序、心跳垄断等）
+---
 
-### 待做事项总览
+## 交易类型
 
-| Phase | 内容 | 是否破坏性 | 预估 LOC |
-|-------|------|-----------|---------|
-| 0 | 原子区块应用 + SafeMath + 错误传播 + Nonce 集中化 + Speculative Validation | 否 | ~400 |
-| 1A | 强制签名验证 + Hash 重算 + Low-S 规范化 | **是** | ~150 |
-| 1B | 区块签名 + 创世时间戳硬编码 | **是** | ~150 |
-| 2A | 钱包加密 Keystore（scrypt + AES-256-GCM）| 否 | ~260 |
-| 2B | 交易回执 + 交易级失败机制 | 否 | ~200 |
-| 2C | Mempool 修复（known map + 切片 GC）| 否 | ~10 |
-| 2D | 网络加固（HTTP 错误 + P2P 限流 + FloodPublish 移除 + 私钥不打印）| 否 | ~60 |
-| 2E | 死代码清理 + TxVestingUnlock 删除 + 未用字段移除 | 否 | ~40 |
-| 3 | 多验证者 PoS（含逐级跳过、单块 reorg、心跳自证、申诉窗口）| **是** | ~1100 |
-| 4A | Swap 滑点保护 (--min-out) | 否 | ~40 |
-| 4B | 真实多签 N-of-M（含 domain separator）| 否 | ~340 |
-| 4C | 蓝币转账手续费修复（固定 MinFee）| 否 | ~10 |
+| TxType | 编号 | 说明 |
+|--------|------|------|
+| Transfer | 0 | 白币转账 |
+| BlueDeploy | 1 | 部署蓝币 |
+| BlueTransfer | 2 | 蓝币转账 |
+| Swap | 3 | AMM 交易 |
+| Reward | 5 | 出块奖励 |
+| Fee | 6 | 手续费 |
+| Heartbeat | 8 | 验证者心跳 |
+| ValidatorJoin | 9 | 加入验证者 |
+| ValidatorExit | 10 | 退出验证者 |
+| ValidatorEvict | 11 | 驱逐验证者 |
+| SlashEvidence | 13 | 双签举报 |
+| BlueBurn | 14 | 蓝币销毁 |
+| MultiSigRegister | 20 | 注册多签钱包 |
+| MultiSigPropose | 21 | 多签提案 |
+| MultiSigApprove | 22 | 多签批准 |
 
-**总计 ~2,760 LOC 新增 / ~700 LOC 修改。10 周实施周期。**
+---
 
-### 多验证者关键设计 (Scheme F v2)
+## API 端点 (16 个)
 
-- **入场**：连续在线 24h（5760 块）→ 自动成为验证者
-- **质押**：余额 ≥ 1000 WC → 自动锁定 stake；心跳需 ≥ 100 WC（防 Sybil）
-- **出块**：按加入时间排序（同 JoinHeight 按地址字典序），逐级跳过出块
-- **掉线**：逐级跳过（每 15s 轮一人），24h 无心跳可被 evict
-- **退出**：7 天解锁后取回质押
-- **Eviction 申诉**：被举报后有 2h（480 块）申诉窗口可反证
-- **心跳自证**：候选人可在 TxValidatorJoin Payload 中自带签名心跳，不依赖出块者打包
-- **验证者集生效**：区块 H 中的变更从 H+1 生效
-- **分叉选择**：同高度冲突块取最低 block hash 胜出（单块 reorg）
-- **确认数**：10 块确认（~2.5 分钟）
-- **确定性共识**：On-Chain Heartbeat + 确定性排序
-- **冷启动兜底**：活跃验证者 < 3 或高度 < 5760 时放宽 24h 要求
+| Method | Endpoint | 说明 |
+|--------|----------|------|
+| GET | `/health` | 健康检查 |
+| GET | `/api/v1/chain/status` | 链状态 |
+| GET | `/api/v1/chain/block/:height` | 按高度查块 |
+| GET | `/api/v1/blocks?limit=&offset=` | 区块列表 |
+| GET | `/api/v1/block/hash/:hash` | 按哈希查块 |
+| GET | `/api/v1/stats` | 网络统计 |
+| GET | `/api/v1/wallet/:address` | 账户余额 |
+| GET | `/api/v1/bluecoin` | 蓝币列表 |
+| GET | `/api/v1/bluecoin/:tokenId` | 蓝币配置 |
+| GET | `/api/v1/bluecoin/:tokenId/state` | 蓝币状态 |
+| GET | `/api/v1/pool/:tokenId` | AMM 池信息 |
+| GET | `/api/v1/validators` | 验证者集 |
+| GET | `/api/v1/multisig/:address` | 多签账户 |
+| POST | `/api/v1/tx/submit` | 提交交易 |
+| GET | `/api/v1/tx/:hash` | 交易回执 |
+| POST | `/api/v1/faucet` | 领取测试币 |
 
-### 破坏性变更
-Phase 1A + 1B + 3 需要清空 genesis，chainID 升级为 `wblue-mainnet-beta-1`。
+---
 
-### 实施顺序
+## CLI 命令
+
 ```
-Week 1:  Phase 0（原子化 + SafeMath + 错误传播 + nonce + speculative validation）
-Week 2:  Phase 2C + 2D + 2E（mempool + 网络加固 + 死代码清理）
-Week 3:  Phase 1A + 1B → 重置 testnet
-Week 4:  Phase 2A + 2B（keystore + 交易回执）
-Week 5:  Phase 3A + 3B（validator types + heartbeat + 自证）
-Week 6:  Phase 3C + 3D（状态机 + 逐级跳过出块）
-Week 7:  Phase 3E + 3F（分叉选择 + 确认数）+ 集成测试
-Week 8:  Phase 4A + 4C（滑点保护 + fee 修复）
-Week 9:  Phase 4B（多签）
-Week 10: 全面审计 → Mainnet Beta 发布
+wblue start                          启动节点
+wblue version                        版本信息
+
+wblue wallet create                  创建钱包
+wblue wallet list                    列出钱包
+wblue wallet info [address]          查询余额
+
+wblue transfer white                 白币转账
+wblue transfer blue                  蓝币转账
+
+wblue bluecoin deploy                部署蓝币
+wblue bluecoin list                  列出蓝币
+wblue bluecoin info [tokenId]        蓝币详情
+wblue bluecoin burn                  销毁蓝币
+
+wblue amm swap                       AMM 交易
+wblue amm pool-info [tokenId]        池子信息
+wblue amm price [tokenId]            当前价格
+
+wblue validator join                 加入验证者
+wblue validator exit                 退出验证者
+wblue validator status               验证者状态
+wblue validator heartbeat            发送心跳
+
+wblue multisig register              注册多签
+wblue multisig propose               多签提案
+wblue multisig approve               批准提案
+wblue multisig info [address]        多签信息
+
+wblue chain status                   链状态
+wblue chain tx [hash]                查询交易
 ```
 
 ---
@@ -120,132 +193,127 @@ white-blue-protocol/
 ├── main.go
 ├── Makefile
 ├── cmd/
-│   ├── root.go          — CLI entry, start 命令, 全局 flags
-│   ├── wallet.go        — wallet create/list/info
-│   ├── transfer.go      — transfer white/blue
-│   ├── amm.go           — amm swap/pool-info/price
-│   ├── bluecoin.go      — bluecoin deploy/list/info
-│   ├── chain.go         — chain status
-│   └── helpers.go       — loadWalletByAddress
+│   ├── root.go              CLI 入口, start/version 命令
+│   ├── wallet.go            钱包命令
+│   ├── transfer.go          转账命令
+│   ├── bluecoin.go          蓝币命令
+│   ├── amm.go               AMM 命令
+│   ├── validator.go         验证者命令
+│   ├── multisig.go          多签命令
+│   ├── chain.go             链查询命令
+│   └── helpers.go           辅助函数
 ├── internal/
-│   ├── node/node.go     — Node 生命周期, Config, P2P 集成
-│   ├── consensus/pos.go — PoS 出块引擎 (BlockCh)
+│   ├── node/node.go         节点生命周期
+│   ├── consensus/pos.go     PoS 出块引擎
 │   ├── chain/
-│   │   ├── blockchain.go — CreateBlock, ApplyBlock, VerifyBlockHash/MerkleRoot
-│   │   └── rewards.go   — CalcReward (年衰减)
-│   ├── state/state.go   — ValidateTransaction, ApplyTransaction (7 types)
+│   │   ├── blockchain.go    区块创建/验证/应用
+│   │   └── rewards.go       奖励计算 (年衰减)
+│   ├── state/
+│   │   ├── state.go         交易执行/验证 (15 种类型)
+│   │   ├── validator.go     验证者状态管理
+│   │   └── multisig.go      多签状态管理
 │   ├── storage/
-│   │   ├── db.go        — BoltDB wrapper
-│   │   ├── block_repo.go — SaveBlock, GetBlockByHeight/Hash
-│   │   └── state_repo.go — Account, Pool, BlueCoin persistence
-│   ├── txpool/mempool.go — Mempool (OnAdd callback, RemoveTxs, MaxSize=10000)
+│   │   ├── db.go            BoltDB 封装
+│   │   ├── block_repo.go    区块持久化
+│   │   ├── state_repo.go    账户/池/蓝币持久化
+│   │   ├── validator_repo.go 验证者持久化
+│   │   └── multisig_repo.go 多签持久化
+│   ├── txpool/mempool.go    交易池
 │   ├── token/
-│   │   ├── deploy.go    — BlueCoin deploy (接受 blockTime 参数)
-│   │   └── vesting.go   — 按月自动释放
+│   │   ├── deploy.go        蓝币部署
+│   │   └── vesting.go       团队代币释放
 │   ├── amm/
-│   │   ├── executor.go  — ExecuteSwap (直接写 DB)
-│   │   └── math.go      — GetAmountOut (x*y=k + 0.1% fee)
+│   │   ├── executor.go      Swap 执行 (2% 销毁)
+│   │   └── math.go          AMM 数学 (x*y=k)
 │   ├── crypto/
-│   │   ├── keypair.go   — ECDSA P-256
-│   │   ├── address.go   — SHA256(pubkey)[:20]
-│   │   ├── hash.go      — SHA256Hex, MerkleRoot
-│   │   └── sign.go      — Sign, Verify
-│   ├── api/server.go    — HTTP API (7 endpoints)
-│   └── p2p/
-│       ├── host.go      — libp2p Host, GossipSub, 区块同步, 验证
-│       ├── messages.go  — Envelope, BlockMsg, TxMsg, StatusMsg, SyncReq/Res
-│       ├── discovery.go — mDNS + seed 节点拨号
-│       └── dedup.go     — ring-buffer 去重
-└── scripts/demo.sh      — 完整功能演示脚本
+│   │   ├── keypair.go       ECDSA P-256
+│   │   ├── sign.go          签名/验签
+│   │   ├── hash.go          SHA-256 / Merkle
+│   │   └── address.go       地址派生
+│   ├── keystore/keystore.go AES-256-GCM 加密钱包
+│   ├── safemath/safemath.go 溢出安全运算
+│   ├── api/
+│   │   ├── server.go        REST API (16 端点)
+│   │   └── faucet.go        水龙头服务
+│   ├── p2p/
+│   │   ├── host.go          libp2p + GossipSub
+│   │   ├── messages.go      消息编解码
+│   │   ├── discovery.go     mDNS + 种子节点
+│   │   └── dedup.go         去重缓冲
+│   ├── log/log.go           结构化日志 (slog)
+│   ├── config/config.go     节点配置
+│   ├── version/version.go   版本信息
+│   └── types/
+│       ├── block.go         区块结构
+│       ├── transaction.go   交易类型定义
+│       ├── account.go       账户结构
+│       ├── bluecoin.go      蓝币结构
+│       ├── validator.go     验证者结构 + 参数
+│       ├── pool.go          AMM 池结构
+│       ├── genesis.go       链参数 + 费用计算
+│       ├── multisig.go      多签结构
+│       ├── receipt.go       回执结构
+│       └── devmode.go       开发模式配置
+├── explorer/                React 前端 (区块浏览器 + 钱包)
+│   └── src/
+│       ├── pages/           11 个页面
+│       ├── components/      UI/布局/钱包组件
+│       ├── api/             API 客户端
+│       ├── hooks/           React Hooks
+│       ├── lib/wallet.ts    钱包加密工具
+│       └── types/           TypeScript 类型
+├── scripts/
+│   └── full_integration_test.sh  集成测试 (23 项)
+└── README.md (+README_zh/ja/ko.md)
 ```
 
 ---
 
-## 已知 MVP 问题（三轮 Review 汇总：38 项）
+## 技术栈
 
-### R1: 原始 11 项
-1. **签名验证空隙** — `state.go:83` 无 publicKey 时跳过验签
-2. **区块无签名** — 任何人可伪造区块
-3. **钱包明文** — 私钥 JSON 明文存盘
-4. **状态非原子** — ApplyBlock 中途崩溃状态不一致
-5. **无交易回执** — 提交后不知道确认状态
-6. **Swap 无滑点保护** — 可能被抢跑
-7. **蓝币手续费不合理** — CalcFee(blueAmount) 逻辑错误
-8. **多签未实现** — 只存了地址字段
-9. **Mempool known map 泄漏** — 只增不减
-10. **HTTP server 吞错误** — 端口冲突时静默失败
-11. **TxVestingUnlock bug** — ApplyTransaction 无该 case
-
-### R2: 代码级 20 项
-12. uint64 溢出可盗币
-13. AMM K 不验证 newK ≥ oldK
-14. big.Int → uint64 截断未检查
-15. GetBlockByHash 悬垂指针
-16. P2P sync 无超时/限流
-17. 私钥打印到控制台
-18. tx hash 不重算
-19. VerifyWithAddress 从未调用
-20. Nonce 递增分散两处
-21. 创世时间戳非确定性
-22. FloodPublish 带宽放大
-23. token deploy K 溢出
-24. ProcessVesting 错误丢弃
-25. SetTotalMinted 错误丢弃
-26. json.Marshal 错误被吞
-27. vesting 全量扫描
-28. account 双重读取
-29. RemoveTxs 切片阻 GC
-30. 死代码/未用字段
-31. validator[:10] panic
-
-### R3: 设计级 18 项
-32. Slot 公式允许偷槽
-33. 无 fork choice → 永久分裂
-34. 验证者集排序无二级键
-35. 验证者集生效时机未定
-36. 心跳打包可被垄断
-37. Eclipse + Eviction 武器化
-38. ApplyBlock 不 re-validate
-39. 同 sender 多 tx 一致性
-40. tx 失败崩溃整块
-41. VerifyBlockHash 需清零 Signature
-42. ECDSA 签名可塑性
-43. 多签地址命名空间冲突
-44. 心跳 Sybil
-45. MEV / 三明治攻击
-46. TxType 编号冲突
-47. 私钥 padding 不足
-48. 无 finality 概念
-49. Reward decay 无 cap
+**后端**: Go 1.26 / Cobra CLI / BoltDB / libp2p + GossipSub / ECDSA P-256
+**前端**: React 18 / TypeScript / Tailwind CSS / Vite / @noble/curves + @noble/ciphers
+**部署**: Ubuntu (阿里云) / systemd / Nginx
 
 ---
 
-## 使用方法
+## 测试
 
-```bash
-# 编译
-make build
-
-# 启动验证者节点
-./wblue start
-
-# 启动全节点（不出块，自动同步）
-./wblue start --no-validator --api-port 8081 --p2p-port 30304 --data-dir ~/.wblue/data2
-
-# 单节点模式（无 P2P，向后兼容）
-./wblue start --no-p2p
-
-# CLI 连接指定节点
-./wblue --api-url http://localhost:8081 chain status
-```
+- **单元测试**: 12 个测试文件，139+ 测试用例 (`go test ./... -count=1`)
+- **集成测试**: 23 项 (`bash scripts/full_integration_test.sh`)
 
 ---
 
-## 白皮书核心设计要点
+## 测试网信息
 
-- 买蓝币 = 投资企业，持有蓝币 = 消费 + 分享增长
-- 企业发币参数部署后永不可改
-- 池子里的白币不归企业，谁都拿不走
-- 池子归零 = 企业自然死亡
-- 协议只提供规则，不做裁判
-- 无运营主体、不触碰法币、不做撮合、不存管、不审核
+| 项目 | 值 |
+|------|-----|
+| Chain ID | `wblue-testnet-1` |
+| 服务器 | 阿里云香港 8.217.52.231 |
+| 浏览器 | http://8.217.52.231 |
+| API | http://8.217.52.231/api/v1/ |
+| P2P 端口 | 30303 |
+| Peer ID | `12D3KooWFp3UcCexRsAbxQ81DtMRedQGwG5hmv1QjP2FzUCXHd8S` |
+| 验证者 | `0xd445b0e5352460b92bcd15e47e0f66174c430c38` |
+| 水龙头 | 每地址每 24h 100 WC |
+
+---
+
+## 已知限制
+
+1. 非活跃候选人在 activeCount >= 3 时无法发送心跳 (需有人先退出)
+2. 无分叉选择规则 / 链重组 (PoS slot 轮转使分叉极少发生)
+3. 无地址交易历史索引 (仅支持按区块查询)
+4. 无助记词备份
+
+---
+
+## 后续计划
+
+| 优先级 | 内容 |
+|--------|------|
+| 高 | 推广测试网 / 寻找测试用户 |
+| 中 | 地址交易历史索引 + API |
+| 中 | P2P 增强 (DHT / NAT 穿透) |
+| 中 | 共识容错 (跳槽 / 分叉选择) |
+| 低 | 助记词备份 |
