@@ -115,3 +115,16 @@ func signAndSubmit(tx *types.Transaction, privKey string) error {
 	}
 	return nil
 }
+
+func findExistingWallet(walletDir string) string {
+	entries, err := os.ReadDir(walletDir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
+			return filepath.Join(walletDir, e.Name())
+		}
+	}
+	return ""
+}

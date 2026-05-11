@@ -75,41 +75,68 @@ var startCmd = &cobra.Command{
 
 		if isValidator {
 			if validator == "" {
-				kp, err := wcrypto.GenerateKeyPair()
-				if err != nil {
-					return err
-				}
-				validator = kp.Address
-				validatorKey = kp.PrivateKey
-				validatorPub = kp.PublicKey
+				walletDir := filepath.Join(dataDir, "wallets")
+				os.MkdirAll(walletDir, 0755)
+				existingWallet := findExistingWallet(walletDir)
 
-				password := valPassword
-				if password == "" {
-					password = os.Getenv("WBLUE_VALIDATOR_PASSWORD")
-				}
-				if password == "" {
-					var err error
-					password, err = readPassword("Set password for validator wallet: ")
+				if existingWallet != "" {
+					password := valPassword
+					if password == "" {
+						password = os.Getenv("WBLUE_VALIDATOR_PASSWORD")
+					}
+					if password == "" {
+						var err error
+						password, err = readPassword("Enter validator wallet password: ")
+						if err != nil {
+							return err
+						}
+					}
+
+					ks, err := keystore.Load(existingWallet)
+					if err != nil {
+						return fmt.Errorf("load wallet: %w", err)
+					}
+					privKey, err := keystore.Decrypt(ks, password)
+					if err != nil {
+						return fmt.Errorf("decrypt wallet: %w", err)
+					}
+					validator = ks.Address
+					validatorKey = privKey
+					validatorPub = ks.PublicKey
+					fmt.Printf("Loaded validator: %s\n", validator)
+				} else {
+					kp, err := wcrypto.GenerateKeyPair()
 					if err != nil {
 						return err
 					}
-				}
+					validator = kp.Address
+					validatorKey = kp.PrivateKey
+					validatorPub = kp.PublicKey
 
-				walletDir := filepath.Join(dataDir, "wallets")
-				os.MkdirAll(walletDir, 0755)
-				walletFile := filepath.Join(walletDir, kp.Address+".json")
+					password := valPassword
+					if password == "" {
+						password = os.Getenv("WBLUE_VALIDATOR_PASSWORD")
+					}
+					if password == "" {
+						var err error
+						password, err = readPassword("Set password for validator wallet: ")
+						if err != nil {
+							return err
+						}
+					}
 
-				ks, err := keystore.Encrypt(kp.PrivateKey, kp.PublicKey, kp.Address, password)
-				if err != nil {
-					return err
+					walletFile := filepath.Join(walletDir, kp.Address+".json")
+					ks, err := keystore.Encrypt(kp.PrivateKey, kp.PublicKey, kp.Address, password)
+					if err != nil {
+						return err
+					}
+					if err := keystore.Save(ks, walletFile); err != nil {
+						return err
+					}
+					fmt.Printf("Generated validator address: %s\n", kp.Address)
+					fmt.Println("(Saved to encrypted wallet file)")
+					fmt.Println()
 				}
-				if err := keystore.Save(ks, walletFile); err != nil {
-					return err
-				}
-
-				fmt.Printf("Generated validator address: %s\n", kp.Address)
-				fmt.Println("(Saved to encrypted wallet file)")
-				fmt.Println()
 			} else {
 				kp, err := loadWalletByAddress(validator)
 				if err != nil {
