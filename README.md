@@ -101,43 +101,58 @@ Yes, even a family:
 
 **Block Explorer**: [http://8.217.52.231](http://8.217.52.231)
 
-Create a wallet, explore blocks, and trade — all from your browser:
-- View real-time blocks, transactions, and validator status
-- Create a wallet and manage your tokens
-- Transfer WhiteCoin and BlueCoin
-- Deploy your own BlueCoin token
-- Swap tokens on the built-in AMM
+Everything below can be done from your browser — no install needed.
 
 ---
 
-## Quick Start
+## Quick Start — What Do You Want to Do?
 
-### Option 1: Use the Web Explorer (No Install)
+### "I want to create a wallet"
 
-Visit [http://8.217.52.231](http://8.217.52.231) and click **Wallet** to get started.
+1. Go to [http://8.217.52.231](http://8.217.52.231) → click **Wallet**
+2. Set a password → click **Create Wallet**
+3. **Write down your 12-word mnemonic phrase** (this is your backup!)
+4. Check "I have saved my mnemonic" → download the keystore file
+5. Done. Your address is shown on screen
 
-### Option 2: Run a Full Node
+### "I want to get some White Coin"
+
+1. Go to [http://8.217.52.231](http://8.217.52.231) → click **Faucet**
+2. Paste your address → click **Claim**
+3. You'll receive 100 WC (once per 24 hours)
+
+### "I want to send tokens to someone"
+
+1. Go to **Wallet** → unlock with your keystore + password
+2. Choose **Transfer WC** tab → enter recipient address and amount → **Send**
+
+### "I want to issue my own Blue Coin"
+
+1. Go to **Wallet** → unlock
+2. Choose **Deploy** tab
+3. Fill in: name, symbol, pool ratio, team ratio, initial WC, monthly release
+4. Click **Deploy** → your token is live with an AMM pool
+
+### "I want to trade Blue Coins"
+
+1. Go to **Wallet** → unlock
+2. Choose **Swap** tab
+3. Pick a token, choose direction (WC→Blue or Blue→WC), enter amount → **Swap**
+
+### "I want to run a validator and earn WC"
 
 ```bash
 git clone https://github.com/Hataka-Mori/white-blue-protocol.git
 cd white-blue-protocol
 make build
-
-# Start a full node (syncs from testnet automatically)
-./wblue start --no-validator
-```
-
-### Option 3: Run a Validator (Earn WC)
-
-```bash
 ./wblue start
 ```
 
-Your node will:
-1. Generate a wallet automatically
-2. Connect to the testnet seed node
-3. Begin the 24-hour candidate period
-4. After 24h + PoW verification, start producing blocks and earning 50 WC per block
+Your node will automatically generate a wallet, connect to the testnet, and start the 24-hour candidate period. After verification, you'll earn 50 WC per block (every 15 seconds).
+
+### "I just want to browse the chain"
+
+Visit [http://8.217.52.231](http://8.217.52.231) — view blocks, transactions, validators, Blue Coins, and any address.
 
 ---
 
