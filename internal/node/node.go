@@ -30,6 +30,7 @@ type Config struct {
 	P2PSeeds     []string
 	P2PMDNS      bool
 	ChainID      string
+	Genesis      bool
 }
 
 type Node struct {
@@ -55,7 +56,18 @@ func NewNode(cfg Config) (*Node, error) {
 		return nil, fmt.Errorf("open storage: %w", err)
 	}
 
-	if cfg.IsValidator && db.GetLatestHeight() == 0 && !db.Has([]byte("blocks"), []byte{0, 0, 0, 0, 0, 0, 0, 0}) {
+	hasData := db.GetLatestHeight() > 0 || db.Has([]byte("blocks"), []byte{0, 0, 0, 0, 0, 0, 0, 0})
+
+	if !hasData {
+		if !cfg.Genesis {
+			db.Close()
+			return nil, fmt.Errorf("no chain data found. Connect to an existing network with --seeds, or use --genesis to create a new chain")
+		}
+		if !cfg.IsValidator {
+			db.Close()
+			return nil, fmt.Errorf("--genesis requires validator mode (do not use --no-validator)")
+		}
+
 		genesis := chain.CreateGenesisBlock(&types.GenesisConfig{
 			ChainID:          cfg.ChainID,
 			GenesisValidator: cfg.Validator,

@@ -29,7 +29,12 @@ var (
 	valPassword string
 	devMode     bool
 	chainID     string
+	genesis     bool
 )
+
+var defaultSeeds = []string{
+	"/ip4/8.217.52.231/tcp/30303/p2p/12D3KooWGrG7xbuUkQCQiuT1PRXFKxSwNv2GiuVcSKu4zaXow9z4",
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "wblue",
@@ -114,6 +119,8 @@ var startCmd = &cobra.Command{
 			}
 		}
 
+		effectiveSeeds := append(defaultSeeds, seeds...)
+
 		cfg := node.Config{
 			DataDir:      dataDir,
 			Validator:    validator,
@@ -123,9 +130,10 @@ var startCmd = &cobra.Command{
 			IsValidator:  isValidator,
 			P2PEnabled:   !noP2P,
 			P2PPort:      p2pPort,
-			P2PSeeds:     seeds,
+			P2PSeeds:     effectiveSeeds,
 			P2PMDNS:      enableMDNS,
 			ChainID:      effectiveChainID,
+			Genesis:      genesis,
 		}
 
 		n, err := node.NewNode(cfg)
@@ -163,6 +171,7 @@ func init() {
 	startCmd.Flags().StringVar(&valPassword, "password", "", "Validator wallet password (or use WBLUE_VALIDATOR_PASSWORD env)")
 	startCmd.Flags().BoolVar(&devMode, "dev", false, "Dev mode: accelerated block timing for testing")
 	startCmd.Flags().StringVar(&chainID, "chain-id", "", "Chain ID (default from config or wblue-mainnet-1)")
+	startCmd.Flags().BoolVar(&genesis, "genesis", false, "Create a new chain (genesis block). Only use this once to bootstrap a new network")
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
 }

@@ -17,6 +17,8 @@ export default function DeployForm({ from, publicKey, privateKey, currentNonce }
   const [poolRatio, setPoolRatio] = useState('70');
   const [initWhite, setInitWhite] = useState('');
   const [releaseMonthly, setReleaseMonthly] = useState('');
+  const [multiSigAddr, setMultiSigAddr] = useState('');
+  const [sourceUrls, setSourceUrls] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successHash, setSuccessHash] = useState('');
@@ -49,6 +51,7 @@ export default function DeployForm({ from, publicKey, privateKey, currentNonce }
 
     setLoading(true);
     try {
+      const urls = sourceUrls.trim() ? sourceUrls.split(',').map(s => s.trim()).filter(Boolean) : [];
       const deployParams = {
         name,
         symbol,
@@ -56,6 +59,8 @@ export default function DeployForm({ from, publicKey, privateKey, currentNonce }
         teamRatio,
         initWhite: initWhiteMicro,
         releaseMonthly: releaseMicro,
+        multiSigAddr: multiSigAddr.trim(),
+        sourceUrls: urls,
       };
       const payloadBase64 = btoa(JSON.stringify(deployParams));
 
@@ -79,6 +84,8 @@ export default function DeployForm({ from, publicKey, privateKey, currentNonce }
       setPoolRatio('70');
       setInitWhite('');
       setReleaseMonthly('');
+      setMultiSigAddr('');
+      setSourceUrls('');
     } catch (e) {
       setError(String(e));
     } finally {
@@ -152,6 +159,28 @@ export default function DeployForm({ from, publicKey, privateKey, currentNonce }
             step="0.000001"
             min="0"
           />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">MultiSig Address (optional)</label>
+          <input
+            type="text"
+            value={multiSigAddr}
+            onChange={(e) => setMultiSigAddr(e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 focus:outline-none focus:border-blue-500 font-mono"
+            placeholder="0x... (team fund managed by multisig)"
+          />
+          <p className="text-xs text-gray-500 mt-1">Team tokens will be released to this multisig wallet monthly</p>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Source URLs (optional, comma separated)</label>
+          <input
+            type="text"
+            value={sourceUrls}
+            onChange={(e) => setSourceUrls(e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
+            placeholder="https://example.com, https://twitter.com/..."
+          />
+          <p className="text-xs text-gray-500 mt-1">Links to the project website, social media, etc.</p>
         </div>
         {fee > 0 && (
           <div className="flex justify-between text-sm">
