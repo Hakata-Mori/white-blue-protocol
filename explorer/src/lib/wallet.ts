@@ -3,6 +3,8 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { gcm } from '@noble/ciphers/aes.js';
 import { scrypt } from 'scrypt-js';
 import { randomBytes } from '@noble/ciphers/utils.js';
+import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english.js';
 
 function safeHexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -66,6 +68,33 @@ export function generateKeyPair(): KeyPair {
   const address = pubKeyToAddress(pubPoint);
   return {
     privateKey: safeBytesToHex(privBytes),
+    publicKey: safeBytesToHex(pubPoint),
+    address,
+  };
+}
+
+export function generateKeyPairFromMnemonic(): { mnemonic: string; keyPair: KeyPair } {
+  const mnemonic = generateMnemonic(wordlist, 128);
+  const keyPair = recoverKeyPairFromMnemonic(mnemonic);
+  return { mnemonic, keyPair };
+}
+
+export function recoverKeyPairFromMnemonic(mnemonic: string): KeyPair {
+  if (!validateMnemonic(mnemonic, wordlist)) {
+    throw new Error('Invalid mnemonic');
+  }
+  const seed = mnemonicToSeedSync(mnemonic, '');
+  const privBytes = seed.slice(0, 32);
+  const N = BigInt('0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551');
+  let privInt = BigInt('0x' + safeBytesToHex(privBytes));
+  privInt = privInt % N;
+  if (privInt === 0n) throw new Error('Derived key is zero');
+  const privHex = privInt.toString(16).padStart(64, '0');
+  const privKeyBytes = safeHexToBytes(privHex);
+  const pubPoint = p256.getPublicKey(privKeyBytes, true);
+  const address = pubKeyToAddress(pubPoint);
+  return {
+    privateKey: privHex,
     publicKey: safeBytesToHex(pubPoint),
     address,
   };

@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	wcrypto "github.com/white-blue-protocol/wblue/internal/crypto"
@@ -20,11 +22,31 @@ var walletCmd = &cobra.Command{
 
 var walletCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a new wallet",
+	Short: "Create a new wallet with mnemonic backup",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		kp, err := wcrypto.GenerateKeyPair()
+		mnemonic, kp, err := wcrypto.GenerateKeyPairFromMnemonic()
 		if err != nil {
 			return err
+		}
+
+		fmt.Println("\n========================================")
+		fmt.Println("  BACKUP YOUR MNEMONIC PHRASE")
+		fmt.Println("========================================")
+		fmt.Println()
+		fmt.Printf("  %s\n", mnemonic)
+		fmt.Println()
+		fmt.Println("  Write these 12 words down and store")
+		fmt.Println("  them in a safe place. You will need")
+		fmt.Println("  them to recover your wallet.")
+		fmt.Println("========================================")
+		fmt.Println()
+
+		fmt.Print("Have you saved your mnemonic? (yes/no): ")
+		reader := bufio.NewReader(os.Stdin)
+		answer, _ := reader.ReadString('\n')
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer != "yes" && answer != "y" {
+			return fmt.Errorf("aborted: please save your mnemonic first")
 		}
 
 		walletDir := filepath.Join(dataDir, "wallets")
@@ -55,6 +77,54 @@ var walletCreateCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Address:    %s\n", kp.Address)
+		fmt.Printf("Public Key: %s\n", kp.PublicKey)
+		fmt.Printf("Saved to:   %s\n", walletFile)
+		return nil
+	},
+}
+
+var walletRecoverCmd = &cobra.Command{
+	Use:   "recover",
+	Short: "Recover wallet from mnemonic phrase",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Print("Enter your 12-word mnemonic: ")
+		reader := bufio.NewReader(os.Stdin)
+		mnemonic, _ := reader.ReadString('\n')
+		mnemonic = strings.TrimSpace(mnemonic)
+
+		kp, err := wcrypto.RecoverKeyPairFromMnemonic(mnemonic)
+		if err != nil {
+			return err
+		}
+
+		walletDir := filepath.Join(dataDir, "wallets")
+		if err := os.MkdirAll(walletDir, 0755); err != nil {
+			return err
+		}
+
+		password, err := readPassword("Enter password for recovered wallet: ")
+		if err != nil {
+			return err
+		}
+		confirm, err := readPassword("Confirm password: ")
+		if err != nil {
+			return err
+		}
+		if password != confirm {
+			return fmt.Errorf("passwords do not match")
+		}
+
+		ks, err := keystore.Encrypt(kp.PrivateKey, kp.PublicKey, kp.Address, password)
+		if err != nil {
+			return err
+		}
+
+		walletFile := filepath.Join(walletDir, kp.Address+".json")
+		if err := keystore.Save(ks, walletFile); err != nil {
+			return err
+		}
+
+		fmt.Printf("Recovered!  %s\n", kp.Address)
 		fmt.Printf("Public Key: %s\n", kp.PublicKey)
 		fmt.Printf("Saved to:   %s\n", walletFile)
 		return nil
@@ -117,6 +187,7 @@ var walletInfoCmd = &cobra.Command{
 
 func init() {
 	walletCmd.AddCommand(walletCreateCmd)
+	walletCmd.AddCommand(walletRecoverCmd)
 	walletCmd.AddCommand(walletListCmd)
 	walletCmd.AddCommand(walletInfoCmd)
 	rootCmd.AddCommand(walletCmd)
