@@ -1,149 +1,219 @@
 # White & Blue Protocol
 
-A blockchain built for enterprise token issuance. Any enterprise can issue its own token (Blue Coin) and trade it against the chain's native currency (White Coin) via an on-chain AMM.
+**Let anyone issue their own token. A coffee shop, a startup, a family — anyone.**
 
-一条专为企业发币而生的区块链。任何企业可发行自己的代币（蓝币），通过链上 AMM 与原生货币（白币）交易。
+White & Blue Protocol is a dual-token PoS blockchain where every organization can issue its own tradeable token (Blue Coin) backed by the chain's native currency (White Coin) through built-in AMM pools.
 
----
-
-## Overview / 概述
-
-**White Coin (WC)** - Native chain token, produced by PoS block rewards. Total supply: 1 billion.
-
-**Blue Coin** - Enterprise tokens. Each enterprise issues one, fixed supply of 1,000,000 per token. Traded via independent AMM pools against White Coin.
-
-**白币** - 链原生代币，PoS 出块产生，总量 10 亿。
-
-**蓝币** - 企业代币。每家企业一种，固定总量 100 万，通过独立 AMM 池子与白币交易。
+> Think of it as: **Every organization gets its own stock-like token, instantly tradeable, with zero listing fees.**
 
 ---
 
-## Quick Start / 快速开始
+## Why Does This Exist?
 
-### Build / 编译
+Traditional fundraising is broken for small organizations:
+- IPOs cost millions and take years
+- Crypto token launches require smart contract expertise
+- Crowdfunding platforms take huge cuts and give investors nothing in return
+
+**White & Blue Protocol fixes this.** Any organization — from a neighborhood coffee shop to a tech startup — can issue its own Blue Coin in one transaction. Supporters buy Blue Coins to show support and potentially profit as the organization grows.
+
+---
+
+## Real-World Examples
+
+### A Coffee Shop
+
+Latte Lab opens a new location and needs community support:
+
+1. Deploy **LatteCoin (LTC)** with 70% in the AMM pool, 30% locked for the team
+2. Inject 500 WC as initial liquidity
+3. Regulars buy LatteCoin through the built-in swap
+4. As more people buy in, the price naturally rises (constant product AMM)
+5. Team's 30% releases monthly — used for expansion, new equipment, etc.
+6. If the shop thrives, early supporters profit. If not, the pool drains naturally — no messy delisting
+
+### A Tech Startup
+
+A 3-person startup wants seed funding without giving up equity:
+
+1. The founders set up a **2-of-3 multisig wallet**
+2. Deploy **StartupCoin (STC)** with the multisig controlling the team allocation
+3. Investors buy StartupCoin on the AMM — the price reflects market confidence
+4. Any team spending requires 2 of 3 founders to agree (multisig)
+5. Monthly token releases fund development milestones
+
+### A Family
+
+Yes, even a family:
+
+1. The Johnsons deploy **JohnsonCoin (JSN)** as a fun family experiment
+2. Family members and friends buy in
+3. The "market cap" becomes a running joke at Thanksgiving dinner
+4. But underneath, it's a real token with real economics — AMM pricing, burn mechanics, the works
+
+### Your Imagination
+
+- A YouTuber issues **FanCoin** — supporters invest in their growth
+- A local farm issues **FarmCoin** — buy tokens, get discounts on produce
+- A school club issues **ClubCoin** — fundraise transparently
+- A band issues **BandCoin** — fans become stakeholders
+
+**If it has supporters, it can have a Blue Coin.**
+
+---
+
+## How It Works
+
+### Two Tokens
+
+| | White Coin (WC) | Blue Coin |
+|---|---|---|
+| What | Native chain currency | Organization-specific token |
+| Supply | 1 billion (mined via PoS) | 1 million per token (fixed) |
+| How to get | Run a validator node | Buy on AMM / receive transfer |
+| Purpose | Gas, liquidity, staking | Investment, community, loyalty |
+
+### Token Economics
+
+- **AMM Pool**: Constant product formula (`x * y = k`). Price moves with supply and demand
+- **2% Burn on Swap**: Every trade burns 2% of Blue Coins, creating deflation
+- **Team Vesting**: Team allocation releases monthly, not all at once
+- **Multisig Control**: Team funds can be locked behind N-of-M multisig for accountability
+- **Natural Death**: If nobody trades, the pool drains to zero. No delisting needed
+
+### Validator Economics
+
+| Parameter | Value |
+|-----------|-------|
+| Join cost | Free (24h online + proof-of-work) |
+| Block reward | 50 WC per block |
+| Block interval | 15 seconds |
+| Auto-staking | Rewards lock as stake until 1,000 WC |
+| Fee sharing | 50% of tx fees go to block producer |
+| Offline penalty | Suspended after 24h, evicted after 72h |
+| Double-sign | Permanently banned + stake destroyed |
+
+---
+
+## Live Testnet
+
+**Block Explorer**: [http://8.217.52.231](http://8.217.52.231)
+
+Create a wallet, explore blocks, and trade — all from your browser:
+- View real-time blocks, transactions, and validator status
+- Create a wallet and manage your tokens
+- Transfer WhiteCoin and BlueCoin
+- Deploy your own BlueCoin token
+- Swap tokens on the built-in AMM
+
+---
+
+## Quick Start
+
+### Option 1: Use the Web Explorer (No Install)
+
+Visit [http://8.217.52.231](http://8.217.52.231) and click **Wallet** to get started.
+
+### Option 2: Run a Full Node
 
 ```bash
-git clone https://github.com/white-blue-protocol/wblue.git
-cd wblue
+git clone https://github.com/Hataka-Mori/white-blue-protocol.git
+cd white-blue-protocol
 make build
-```
 
-### Run Node / 启动节点
-
-```bash
-# Validator node (default) / 验证者节点（默认）
-./wblue start
-
-# Full node (non-validator) / 全节点（不出块）
+# Start a full node (syncs from testnet automatically)
 ./wblue start --no-validator
-
-# Single-node mode (no P2P, backward compatible) / 单节点模式（无 P2P，向后兼容）
-./wblue start --no-p2p
 ```
 
-This will:
-- Generate a validator address (auto-saved to wallet)
-- Create the genesis block (validator receives 10,000 WC premine)
-- Start producing blocks every 15 seconds
-- Start HTTP API on port 8080
-- Start P2P networking on port 30303 (with mDNS discovery)
-
-启动后将：
-- 自动生成验证者地址（保存到钱包）
-- 创建创世块（验证者获得 10,000 白币预挖）
-- 每 15 秒出一个块
-- 在 8080 端口启动 HTTP API
-- 在 30303 端口启动 P2P 网络（支持 mDNS 自动发现）
-
-### Multi-Node Setup / 多节点部署
+### Option 3: Run a Validator (Earn WC)
 
 ```bash
-# Terminal 1: Start validator node A / 启动验证者节点 A
-./wblue start --api-port 8080 --p2p-port 30303
-
-# Terminal 2: Start full node B (auto-discovers A via mDNS on LAN)
-# 启动全节点 B（局域网内通过 mDNS 自动发现 A）
-./wblue start --no-validator --api-port 8081 --p2p-port 30304 --data-dir ~/.wblue/data2
-
-# Or connect to a remote seed node / 或连接远程种子节点
-./wblue start --no-validator --seeds "/ip4/1.2.3.4/tcp/30303/p2p/12D3KooW..."
+./wblue start
 ```
+
+Your node will:
+1. Generate a wallet automatically
+2. Connect to the testnet seed node
+3. Begin the 24-hour candidate period
+4. After 24h + PoW verification, start producing blocks and earning 50 WC per block
 
 ---
 
-## Commands / 命令
+## CLI Commands
 
-### Node / 节点
-
-```bash
-wblue start                              # Start validator + P2P / 启动验证者+P2P
-wblue start --no-validator               # Full node, no block production / 全节点不出块
-wblue start --no-p2p                     # Single node, no networking / 单节点无网络
-wblue start --api-port 8081              # Custom API port / 自定义 API 端口
-wblue start --p2p-port 30304             # Custom P2P port / 自定义 P2P 端口
-wblue start --seeds "/ip4/.../p2p/..."   # Connect to seed nodes / 连接种子节点
-wblue start --mdns=false                 # Disable mDNS discovery / 禁用 mDNS
-```
-
-### Wallet / 钱包
+### Wallet
 
 ```bash
-wblue wallet create              # Create new wallet / 创建钱包
-wblue wallet list                # List wallets / 列出钱包
-wblue wallet info <address>      # Show balance / 查看余额
+wblue wallet create                # Create new wallet
+wblue wallet list                  # List wallets
+wblue wallet info <address>        # Show balance
 ```
 
-### Transfer / 转账
+### Transfer
 
 ```bash
 wblue transfer white --from <addr> --to <addr> --amount 100
-wblue transfer blue --from <addr> --to <addr> --token <tokenId> --amount 500
+wblue transfer blue --from <addr> --to <addr> --token <id> --amount 500
 ```
 
-### Blue Coin / 蓝币
+### Blue Coin
 
 ```bash
-# Deploy / 发币
+# Deploy a new token
 wblue bluecoin deploy \
   --from <addr> \
-  --name "FooCoffee" \
-  --symbol "FOO" \
-  --pool-ratio 20 \
-  --team-ratio 80 \
-  --init-white 1000 \
-  --release-monthly 20000 \
-  --multisig <addr>
+  --name "LatteCoin" \
+  --symbol "LTC" \
+  --pool-ratio 70 \
+  --team-ratio 30 \
+  --init-white 500 \
+  --release-monthly 5000 \
+  --multisig <multisig-addr>
 
-# Query / 查询
-wblue bluecoin list              # List all blue coins / 列出所有蓝币
-wblue bluecoin info <tokenId>    # Show details / 查看详情
+# Query
+wblue bluecoin list
+wblue bluecoin info <tokenId>
+wblue bluecoin burn --from <addr> --token <id> --amount 1000
 ```
 
-### AMM Trading / AMM 交易
+### AMM Swap
 
 ```bash
-# Buy blue coin with white coin / 用白币买蓝币
-wblue amm swap --from <addr> --token <tokenId> --direction white-to-blue --amount-in 100
+# Buy Blue Coin with White Coin
+wblue amm swap --from <addr> --token <id> --direction white-to-blue --amount-in 100
 
-# Sell blue coin for white coin / 卖蓝币换白币
-wblue amm swap --from <addr> --token <tokenId> --direction blue-to-white --amount-in 500
+# Sell Blue Coin for White Coin
+wblue amm swap --from <addr> --token <id> --direction blue-to-white --amount-in 500
 
-# Check pool / 查看池子
+# Check pool
 wblue amm pool-info <tokenId>
 wblue amm price <tokenId>
 ```
 
-### Chain / 链查询
+### Validator
 
 ```bash
-wblue chain status               # Chain status / 链状态
+wblue validator join --from <addr>
+wblue validator exit --from <addr>
+wblue validator status
+wblue validator heartbeat --from <addr>
 ```
 
-### Global Flags / 全局参数
+### Multisig
 
 ```bash
-wblue --api-url http://localhost:8081 chain status   # Connect to a different node / 连接不同节点
-wblue --data-dir /path/to/data wallet list           # Custom data dir / 自定义数据目录
+wblue multisig register --owners addr1,addr2,addr3 --threshold 2
+wblue multisig propose --multisig <ms-addr> --to <target> --amount 100
+wblue multisig approve --multisig <ms-addr> --proposal-id 0
+wblue multisig info --address <ms-addr>
+```
+
+### Chain
+
+```bash
+wblue chain status
+wblue chain tx <hash>
+wblue version
 ```
 
 ---
@@ -152,132 +222,76 @@ wblue --data-dir /path/to/data wallet list           # Custom data dir / 自定�
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/chain/status` | Chain status / 链状态 |
-| GET | `/api/v1/chain/block/:height` | Get block / 查区块 |
-| GET | `/api/v1/wallet/:address` | Get balance / 查余额 |
-| GET | `/api/v1/bluecoin` | List blue coins / 列出蓝币 |
-| GET | `/api/v1/bluecoin/:tokenId` | Blue coin info / 蓝币详情 |
-| GET | `/api/v1/pool/:tokenId` | Pool info / 池子信息 |
-| POST | `/api/v1/tx/submit` | Submit transaction / 提交交易 |
+| GET | `/health` | Health check |
+| GET | `/api/v1/chain/status` | Chain status |
+| GET | `/api/v1/chain/block/:height` | Get block by height |
+| GET | `/api/v1/blocks?limit=20&offset=0` | List blocks (paginated) |
+| GET | `/api/v1/block/hash/:hash` | Get block by hash |
+| GET | `/api/v1/stats` | Network statistics |
+| GET | `/api/v1/wallet/:address` | Account balance |
+| GET | `/api/v1/bluecoin` | List all Blue Coins |
+| GET | `/api/v1/bluecoin/:tokenId` | Blue Coin config |
+| GET | `/api/v1/bluecoin/:tokenId/state` | Blue Coin state (burned, locked) |
+| GET | `/api/v1/pool/:tokenId` | AMM pool info |
+| GET | `/api/v1/validators` | Validator set |
+| GET | `/api/v1/multisig/:address` | Multisig account |
+| POST | `/api/v1/tx/submit` | Submit transaction |
+| GET | `/api/v1/tx/:hash` | Transaction receipt |
 
 ---
 
-## P2P Networking / P2P 网络
-
-Built on [libp2p](https://libp2p.io/) with GossipSub for message propagation.
-
-基于 [libp2p](https://libp2p.io/) 构建，使用 GossipSub 进行消息传播。
-
-### Features / 功能
-
-- **Block broadcast**: new blocks propagate to all connected nodes / 新区块广播到所有节点
-- **Transaction relay**: submitted transactions forwarded across the network / 提交的交易在全网转发
-- **Block sync**: new nodes automatically download historical blocks from peers / 新节点自动从对等节点同步历史区块
-- **mDNS discovery**: automatic peer discovery on local network / 局域网自动发现节点
-- **Seed nodes**: bootstrap from known nodes on the internet / 通过已知种子节点接入网络
-
-### Protocol / 协议
-
-| Component | Details |
-|-----------|---------|
-| GossipSub topics | `wblue/blocks/1`, `wblue/txs/1` |
-| Sync stream | `/wblue/sync/1.0.0` (JSON newline-delimited) |
-| Node identity | Ed25519 key (persisted at `<dataDir>/node.key`) |
-| Default port | 30303 |
-| Max peers | 50 (managed by ConnManager) |
-| Message size limit | 1 MB |
-
----
-
-## How It Works / 工作原理
-
-### Block Production / 出块
-
-- PoS consensus, 15-second block interval
-- Block reward: 50 WC (decreases 10% annually)
-- Transaction fee: max(0.001 WC, 0.1% of amount), burned
-- AMM swap fee: 0.1% (built into pool math, burned)
-
-- PoS 共识，15 秒出块
-- 区块奖励：50 白币（每年衰减 10%）
-- 交易手续费：max(0.001 WC, 金额×0.1%)，销毁
-- AMM 交易费：0.1%（内建于池子数学，销毁）
-
-### Blue Coin Issuance / 蓝币发行
-
-- Fixed supply: 1,000,000 per blue coin
-- Parameters set at deploy, immutable after
-- Pool ratio: % of supply that goes into AMM pool
-- Team ratio: % locked, released monthly to team address
-- Deployer must inject White Coins to seed the pool
-
-- 固定总量：每种蓝币 100 万
-- 参数部署时设定，之后不可更改
-- 池子比例：多少进 AMM 池子
-- 团队比例：锁仓，按月释放到团队地址
-- 发币者需注入白币作为池子初始流动性
-
-### AMM Pool / AMM 池子
-
-- Constant product formula: `x * y = k`
-- Each blue coin has an independent pool
-- Price determined by supply and demand
-- 0.1% swap fee burned
-- Pool drains to zero = natural death, no delisting needed
-
-- 恒定乘积公式：`x * y = k`
-- 每种蓝币独立池子
-- 价格由供需自动决定
-- 0.1% 交易费销毁
-- 池子归零 = 自然死亡，无需退市
-
----
-
-## Architecture / 架构
+## Architecture
 
 ```
 wblue (single binary)
-├── P2P Network (libp2p, GossipSub, mDNS, block sync)
-├── Consensus (PoS, 15s blocks)
-├── State Machine (accounts, balances, pools)
-├── Storage (BoltDB)
-├── Token Engine (deploy, vesting)
-├── AMM Engine (constant product swap)
-├── HTTP API (:8080)
-└── CLI (cobra)
+ ├── Consensus    PoS with slot rotation, 15s blocks
+ ├── State        Accounts, balances, validator set
+ ├── Storage      BoltDB (embedded key-value store)
+ ├── Token        Blue Coin deploy, vesting, burn
+ ├── AMM          Constant product swap with 2% burn
+ ├── Multisig     N-of-M on-chain multisig wallets
+ ├── P2P          libp2p + GossipSub + mDNS
+ ├── API          REST API with rate limiting + CORS
+ ├── Explorer     React + TypeScript + Tailwind CSS
+ └── CLI          Cobra commands
 ```
 
 ---
 
-## Key Parameters / 关键参数
+## Key Parameters
 
 | Parameter | Value |
 |-----------|-------|
-| White Coin total supply / 白币总量 | 1,000,000,000 |
-| Block interval / 出块间隔 | 15 seconds |
-| Initial block reward / 初始出块奖励 | 50 WC |
-| Annual decay / 年衰减率 | 10% |
-| Blue Coin supply (per token) / 蓝币总量 | 1,000,000 |
-| Transaction fee / 交易手续费 | max(0.001 WC, 0.1%) burned |
-| AMM swap fee / AMM 交易费 | 0.1% burned |
-| Genesis premine / 创世预挖 | 10,000 WC |
-| P2P default port / P2P 默认端口 | 30303 |
-| API default port / API 默认端口 | 8080 |
+| White Coin total supply | 1,000,000,000 |
+| Block interval | 15 seconds |
+| Block reward | 50 WC (decays 10% annually) |
+| Blue Coin supply (per token) | 1,000,000 |
+| Swap burn rate | 2% of Blue Coin per trade |
+| Transaction fee | max(0.001 WC, 0.1% of amount) |
+| Validator join | Free (24h + PoW) |
+| Auto-staking cap | 1,000 WC |
+| Suspend threshold | 24 hours offline |
+| Evict threshold | 72 hours offline |
+| Genesis premine | 10,000 WC |
 
 ---
 
 ## Roadmap
 
-- [x] Single-node prototype / 单节点原型
-- [x] White Coin (PoS mining) / 白币（PoS 挖矿）
-- [x] Blue Coin issuance / 蓝币发行
-- [x] AMM trading / AMM 交易
-- [x] Vesting schedule / 锁仓释放
-- [x] CLI + HTTP API
-- [x] P2P networking / P2P 网络
-- [ ] Multi-validator PoS / 多验证者 PoS
-- [ ] Web UI / 网页界面
-- [ ] Smart contract VM / 智能合约虚拟机
+- [x] Dual-token PoS blockchain (White Coin + Blue Coin)
+- [x] AMM with constant product formula + 2% burn
+- [x] Multi-validator PoS with slot rotation
+- [x] Validator economics (free join, auto-stake, slashing)
+- [x] N-of-M multisig wallets
+- [x] Team vesting with monthly release
+- [x] P2P networking (libp2p + GossipSub)
+- [x] Block explorer + web wallet
+- [x] API rate limiting, CORS, input validation
+- [x] Structured logging (slog)
+- [x] Testnet deployment
+- [ ] NAT traversal for home nodes
+- [ ] Address transaction history index
+- [ ] Mobile wallet app
 
 ---
 
