@@ -730,7 +730,8 @@ func TestValidatorAutoStaking(t *testing.T) {
 	db.SaveAccount(acct)
 
 	rewardPerBlock := uint64(50_000_000)
-	blocksNeeded := types.StakeAmount / rewardPerBlock
+	stakeTarget := types.DynamicStakeAmount(1)
+	blocksNeeded := stakeTarget / rewardPerBlock
 	totalBlocks := blocksNeeded + 5
 
 	for i := uint64(0); i < totalBlocks; i++ {
@@ -754,8 +755,8 @@ func TestValidatorAutoStaking(t *testing.T) {
 	}
 
 	finalAcct, _ := db.GetAccount(validatorKP.Address)
-	if finalAcct.StakedBalance != uint64(types.StakeAmount) {
-		t.Fatalf("staked balance should be %d, got %d", types.StakeAmount, finalAcct.StakedBalance)
+	if finalAcct.StakedBalance != stakeTarget {
+		t.Fatalf("staked balance should be %d, got %d", stakeTarget, finalAcct.StakedBalance)
 	}
 
 	extraRewards := uint64(5) * rewardPerBlock

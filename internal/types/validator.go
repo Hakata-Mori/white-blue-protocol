@@ -9,14 +9,30 @@ const (
 	ValidatorStatusRemoved    = "removed"
 	ValidatorStatusSlashed    = "slashed"
 
-	StakeAmount        = 1_000_000_000
+	MinStakeAmount     = 10_000_000_000
+	StakeTargetDays    = 1
 	UptimeBlocks       = 5760
 	SuspendBlocks      = 5760
 	EvictBlocks        = 17280
 	ConfirmationBlocks = 10
 	PoWDifficulty      = 24
 	SlashReward        = 10_000_000
+	BlocksPerDay       = 5760
 )
+
+var StakeAmount = MinStakeAmount
+
+func DynamicStakeAmount(activeCount int) uint64 {
+	if activeCount <= 0 {
+		activeCount = 1
+	}
+	dailyRewardPerValidator := uint64(InitialReward) * BlocksPerDay / uint64(activeCount)
+	stake := dailyRewardPerValidator * StakeTargetDays
+	if stake < MinStakeAmount {
+		return MinStakeAmount
+	}
+	return stake
+}
 
 type ValidatorRecord struct {
 	Address              string `json:"address"`

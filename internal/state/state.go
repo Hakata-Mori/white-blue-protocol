@@ -310,13 +310,19 @@ func applyBlockRewardInTx(btx *bolt.Tx, tx *types.Transaction) error {
 	rec := vs.FindRecord(tx.To)
 	isActiveValidator := rec != nil && rec.Status == types.ValidatorStatusActive
 
-	if isActiveValidator && account.StakedBalance < types.StakeAmount {
-		need := uint64(types.StakeAmount) - account.StakedBalance
-		if tx.Amount <= need {
-			account.StakedBalance += tx.Amount
+	if isActiveValidator {
+		activeCount := len(vs.ActiveValidators())
+		stakeTarget := types.DynamicStakeAmount(activeCount)
+		if account.StakedBalance < stakeTarget {
+			need := stakeTarget - account.StakedBalance
+			if tx.Amount <= need {
+				account.StakedBalance += tx.Amount
+			} else {
+				account.StakedBalance = stakeTarget
+				account.WhiteBalance += tx.Amount - need
+			}
 		} else {
-			account.StakedBalance = types.StakeAmount
-			account.WhiteBalance += tx.Amount - need
+			account.WhiteBalance += tx.Amount
 		}
 	} else {
 		account.WhiteBalance += tx.Amount

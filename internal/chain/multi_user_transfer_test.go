@@ -541,11 +541,12 @@ func TestFeeShareMultiTransfer(t *testing.T) {
 	}
 
 	validatorShare := totalFees / 2
-	expectedValidator := validatorInitial + 50_000_000 + validatorShare
+	expectedTotal := validatorInitial + 50_000_000 + validatorShare
 	validatorAfter, _ := db.GetAccount(validatorKP.Address)
-	if validatorAfter.WhiteBalance != expectedValidator {
-		t.Fatalf("validator balance: expected %d, got %d (totalFees=%d, share=%d)",
-			expectedValidator, validatorAfter.WhiteBalance, totalFees, validatorShare)
+	actualTotal := validatorAfter.WhiteBalance + validatorAfter.StakedBalance
+	if actualTotal != expectedTotal {
+		t.Fatalf("validator total balance: expected %d, got %d (totalFees=%d, share=%d)",
+			expectedTotal, actualTotal, totalFees, validatorShare)
 	}
 
 	fmt.Printf("totalFees=%d validatorShare=%d\n", totalFees, validatorShare)
