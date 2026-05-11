@@ -96,6 +96,14 @@ export default function WalletInfo({ address, publicKey }: WalletInfoProps) {
           </div>
         </div>
       )}
+      <div className="mt-4 pt-4 border-t border-gray-700/50">
+        <Link
+          to={`/address/${address}`}
+          className="text-blue-400 hover:text-blue-300 text-sm"
+        >
+          View Transaction History &rarr;
+        </Link>
+      </div>
     </div>
   );
 }
