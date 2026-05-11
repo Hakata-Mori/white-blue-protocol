@@ -107,6 +107,8 @@ Everything below can be done from your browser — no install needed.
 
 ## Quick Start — What Do You Want to Do?
 
+> **White Coin (WC)** is the chain's native currency — earned by running a validator node. **Blue Coin** is a token issued by any organization — bought and sold on the built-in AMM.
+
 ### "I want to create a wallet"
 
 1. Go to [http://8.217.52.231](http://8.217.52.231) → click **Wallet**
