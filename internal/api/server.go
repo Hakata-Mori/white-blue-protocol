@@ -572,7 +572,9 @@ func (s *Server) handleAddressTxs(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	result, err := s.db.GetAddressTxs(address, offset, limit)
+	excludeSystem := r.URL.Query().Get("all") != "true"
+
+	result, err := s.db.GetAddressTxs(address, offset, limit, excludeSystem)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

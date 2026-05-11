@@ -262,7 +262,7 @@ type AddressTxsResult struct {
 	Total int         `json:"total"`
 }
 
-func (d *DB) GetAddressTxs(address string, offset, limit int) (*AddressTxsResult, error) {
+func (d *DB) GetAddressTxs(address string, offset, limit int, excludeSystem bool) (*AddressTxsResult, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -273,15 +273,6 @@ func (d *DB) GetAddressTxs(address string, offset, limit int) (*AddressTxsResult
 	result := &AddressTxsResult{}
 
 	err := d.db.View(func(btx *bolt.Tx) error {
-		bc := btx.Bucket(bucketAddrTxCount)
-		raw := bc.Get([]byte(address))
-		if raw != nil {
-			result.Total = int(binary.BigEndian.Uint64(raw))
-		}
-		if result.Total == 0 {
-			return nil
-		}
-
 		b := btx.Bucket(bucketAddrTxs)
 		txBucket := btx.Bucket(bucketTxs)
 		rcptBucket := btx.Bucket(bucketReceipts)
@@ -291,16 +282,9 @@ func (d *DB) GetAddressTxs(address string, offset, limit int) (*AddressTxsResult
 
 		skipped := 0
 		collected := 0
+		total := 0
 
 		for k, v := c.Seek(prefix); k != nil && len(k) >= addrLen && string(k[:addrLen]) == address; k, v = c.Next() {
-			if skipped < offset {
-				skipped++
-				continue
-			}
-			if collected >= limit {
-				break
-			}
-
 			txHash := string(v)
 			txData := txBucket.Get([]byte(txHash))
 			if txData == nil {
@@ -312,16 +296,30 @@ func (d *DB) GetAddressTxs(address string, offset, limit int) (*AddressTxsResult
 				continue
 			}
 
+			if excludeSystem && (txn.Type == types.TxBlockReward || txn.Type == types.TxHeartbeat) {
+				continue
+			}
+
+			total++
+
+			if skipped < offset {
+				skipped++
+				continue
+			}
+			if collected >= limit {
+				continue
+			}
+
 			summary := TxSummary{
-				Hash:    txn.Hash,
-				Type:    uint8(txn.Type),
-				From:    txn.From,
-				To:      txn.To,
-				Amount:  txn.Amount,
-				Fee:     txn.Fee,
-				TokenID: txn.TokenID,
+				Hash:      txn.Hash,
+				Type:      uint8(txn.Type),
+				From:      txn.From,
+				To:        txn.To,
+				Amount:    txn.Amount,
+				Fee:       txn.Fee,
+				TokenID:   txn.TokenID,
 				Timestamp: txn.Timestamp,
-				Status:  "success",
+				Status:    "success",
 			}
 
 			rcptData := rcptBucket.Get([]byte(txHash))
@@ -337,6 +335,7 @@ func (d *DB) GetAddressTxs(address string, offset, limit int) (*AddressTxsResult
 			collected++
 		}
 
+		result.Total = total
 		return nil
 	})
 

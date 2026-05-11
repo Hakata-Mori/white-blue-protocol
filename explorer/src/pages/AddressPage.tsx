@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch';
 import { getWallet, getAddressTxs } from '../api/wallet';
@@ -18,6 +18,7 @@ export default function AddressPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
   const offset = (page - 1) * TXS_PER_PAGE;
+  const [showAll, setShowAll] = useState(false);
 
   const walletFetcher = useCallback(
     () => getWallet(address!),
@@ -25,8 +26,8 @@ export default function AddressPage() {
   );
 
   const txsFetcher = useCallback(
-    () => getAddressTxs(address!, TXS_PER_PAGE, offset),
-    [address, offset]
+    () => getAddressTxs(address!, TXS_PER_PAGE, offset, showAll),
+    [address, offset, showAll]
   );
 
   const { data: account, loading, error } = useFetch(walletFetcher);
@@ -34,6 +35,11 @@ export default function AddressPage() {
 
   const handlePageChange = (newPage: number) => {
     setSearchParams({ page: String(newPage) });
+  };
+
+  const handleToggleAll = () => {
+    setShowAll(!showAll);
+    setSearchParams({ page: '1' });
   };
 
   if (loading && !account) {
@@ -141,11 +147,27 @@ export default function AddressPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold">Transaction History</h2>
-          <span className="text-gray-400 text-sm">Total: {totalTxs.toLocaleString()}</span>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleToggleAll}
+              className={`px-3 py-1 rounded text-sm ${
+                showAll
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200'
+              }`}
+            >
+              {showAll ? 'Show All' : 'Hide System Txs'}
+            </button>
+            <span className="text-gray-400 text-sm">Total: {totalTxs.toLocaleString()}</span>
+          </div>
         </div>
 
         {txsLoading && !txsData ? (
           <LoadingSpinner />
+        ) : txs.length === 0 ? (
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 text-center">
+            <span className="text-gray-400">No transactions found</span>
+          </div>
         ) : (
           <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 overflow-x-auto">
             <table className="w-full">
