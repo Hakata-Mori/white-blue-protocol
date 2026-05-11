@@ -120,13 +120,13 @@ export async function encryptKeystore(
     32768, 8, 1, 32
   );
 
-  const key = await crypto.subtle.importKey('raw', dk.buffer as ArrayBuffer, 'AES-GCM', false, ['encrypt']);
+  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk), 'AES-GCM', false, ['encrypt']);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const privBytes = hexToBytes(privateKeyHex);
+  const privBytes = new Uint8Array(hexToBytes(privateKeyHex));
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: nonce },
     key,
-    privBytes.buffer as ArrayBuffer
+    privBytes
   );
 
   return {
@@ -153,7 +153,7 @@ export async function decryptKeystore(
   ks: KeystoreFile,
   password: string
 ): Promise<KeyPair> {
-  const salt = hexToBytes(ks.crypto.kdfparams.salt);
+  const salt = new Uint8Array(hexToBytes(ks.crypto.kdfparams.salt));
   const dk = await scrypt(
     new TextEncoder().encode(password),
     salt,
@@ -163,14 +163,14 @@ export async function decryptKeystore(
     ks.crypto.kdfparams.dklen
   );
 
-  const key = await crypto.subtle.importKey('raw', dk.buffer as ArrayBuffer, 'AES-GCM', false, ['decrypt']);
-  const nonce = hexToBytes(ks.crypto.nonce);
-  const ciphertext = hexToBytes(ks.crypto.ciphertext);
+  const key = await crypto.subtle.importKey('raw', new Uint8Array(dk), 'AES-GCM', false, ['decrypt']);
+  const nonce = new Uint8Array(hexToBytes(ks.crypto.nonce));
+  const ciphertext = new Uint8Array(hexToBytes(ks.crypto.ciphertext));
 
   const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: nonce.buffer as ArrayBuffer },
+    { name: 'AES-GCM', iv: nonce },
     key,
-    ciphertext.buffer as ArrayBuffer
+    ciphertext
   );
 
   const privateKeyHex = bytesToHex(new Uint8Array(plaintext));
