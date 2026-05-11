@@ -19,18 +19,21 @@ import (
 )
 
 type Config struct {
-	DataDir      string
-	Validator    string
-	ValidatorKey string
-	ValidatorPub string
-	APIPort      int
-	IsValidator  bool
-	P2PEnabled   bool
-	P2PPort      int
-	P2PSeeds     []string
-	P2PMDNS      bool
-	ChainID      string
-	Genesis      bool
+	DataDir        string
+	Validator      string
+	ValidatorKey   string
+	ValidatorPub   string
+	APIPort        int
+	IsValidator    bool
+	P2PEnabled     bool
+	P2PPort        int
+	P2PSeeds       []string
+	P2PMDNS        bool
+	ChainID        string
+	Genesis        bool
+	FaucetKey      string
+	FaucetPub      string
+	FaucetAddr     string
 }
 
 type Node struct {
@@ -131,6 +134,13 @@ func (n *Node) Start() error {
 	log.Info("block interval", "seconds", types.GetBlockInterval())
 
 	apiServer := api.NewServer(n.DB, n.State, n.Mempool, n.cfg.APIPort, n.cfg.ChainID)
+
+	if n.cfg.FaucetKey != "" && n.cfg.FaucetAddr != "" {
+		faucet := api.NewFaucet(n.DB, n.Mempool, n.cfg.FaucetAddr, n.cfg.FaucetKey, n.cfg.FaucetPub)
+		apiServer.SetFaucet(faucet)
+		log.Info("faucet enabled", "address", n.cfg.FaucetAddr[:10]+"...")
+	}
+
 	apiServer.Start()
 
 	if n.cfg.P2PEnabled {

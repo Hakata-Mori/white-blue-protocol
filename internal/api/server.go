@@ -90,6 +90,7 @@ type Server struct {
 	chainID string
 	httpSrv *http.Server
 	limiter *ipLimiter
+	faucet  *Faucet
 
 	statsMu       sync.Mutex
 	statsCachedAt time.Time
@@ -98,6 +99,10 @@ type Server struct {
 
 func NewServer(db *storage.DB, st *state.StateDB, mp *txpool.Mempool, port int, chainID string) *Server {
 	return &Server{db: db, state: st, mempool: mp, port: port, chainID: chainID}
+}
+
+func (s *Server) SetFaucet(f *Faucet) {
+	s.faucet = f
 }
 
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -174,6 +179,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/tx/", wrap(s.handleGetTx))
 	mux.HandleFunc("/api/v1/validators", wrap(s.handleValidators))
 	mux.HandleFunc("/api/v1/multisig/", wrap(s.handleMultiSig))
+	mux.HandleFunc("/api/v1/faucet", wrapSubmit(s.handleFaucet))
 
 	addr := fmt.Sprintf(":%d", s.port)
 	log.Info("http api listening", "addr", addr)
@@ -458,6 +464,66 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	s.statsMu.Unlock()
 
 	writeJSON(w, resp)
+}
+
+func (s *Server) handleFaucet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.faucet == nil {
+		http.Error(w, "faucet not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Address string `json:"address"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if !isValidAddress(req.Address) {
+		http.Error(w, "invalid address format", http.StatusBadRequest)
+		return
+	}
+
+	ip := extractIP(r)
+	canClaim, remaining := s.faucet.CheckCooldown(req.Address)
+	if !canClaim {
+		writeJSON(w, map[string]interface{}{
+			"error":       "too soon",
+			"retryAfter":  int(remaining.Seconds()),
+			"retryAfterH": fmt.Sprintf("%.1fh", remaining.Hours()),
+		})
+		return
+	}
+
+	canClaimIP, remainingIP := s.faucet.CheckCooldown("ip:" + ip)
+	if !canClaimIP {
+		writeJSON(w, map[string]interface{}{
+			"error":       "too soon",
+			"retryAfter":  int(remainingIP.Seconds()),
+			"retryAfterH": fmt.Sprintf("%.1fh", remainingIP.Hours()),
+		})
+		return
+	}
+
+	hash, err := s.faucet.Request(req.Address)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.faucet.RecordClaim(req.Address)
+	s.faucet.RecordClaim("ip:" + ip)
+
+	writeJSON(w, map[string]interface{}{
+		"status": "success",
+		"hash":   hash,
+		"amount": FaucetAmount,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

@@ -13,6 +13,7 @@ export default function Header() {
           <Link to="/blocks" className="text-gray-300 hover:text-white">Blocks</Link>
           <Link to="/bluecoins" className="text-gray-300 hover:text-white">Blue Coins</Link>
           <Link to="/validators" className="text-gray-300 hover:text-white">Validators</Link>
+          <Link to="/faucet" className="text-gray-300 hover:text-white">Faucet</Link>
           <Link to="/wallet" className="text-gray-300 hover:text-white">Wallet</Link>
         </nav>
         <SearchBar />

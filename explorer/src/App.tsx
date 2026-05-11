@@ -9,6 +9,7 @@ import BlueCoinListPage from './pages/BlueCoinListPage';
 import BlueCoinDetailPage from './pages/BlueCoinDetailPage';
 import ValidatorsPage from './pages/ValidatorsPage';
 import WalletPage from './pages/WalletPage';
+import FaucetPage from './pages/FaucetPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="bluecoins" element={<BlueCoinListPage />} />
         <Route path="bluecoin/:tokenId" element={<BlueCoinDetailPage />} />
         <Route path="validators" element={<ValidatorsPage />} />
+        <Route path="faucet" element={<FaucetPage />} />
         <Route path="wallet" element={<WalletPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

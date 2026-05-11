@@ -113,3 +113,10 @@ func (d *DB) Has(bucket []byte, key []byte) bool {
 func (d *DB) Bolt() *bolt.DB {
 	return d.db
 }
+
+func (d *DB) EnsureBucket(name []byte) {
+	d.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(name)
+		return err
+	})
+}

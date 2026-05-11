@@ -28,8 +28,9 @@ var (
 	enableMDNS  bool
 	valPassword string
 	devMode     bool
-	chainID     string
-	genesis     bool
+	chainID      string
+	genesis      bool
+	faucetWallet string
 )
 
 var defaultSeeds = []string{
@@ -136,6 +137,28 @@ var startCmd = &cobra.Command{
 			Genesis:      genesis,
 		}
 
+		if faucetWallet != "" {
+			faucetPassword := os.Getenv("WBLUE_FAUCET_PASSWORD")
+			if faucetPassword == "" {
+				var fpErr error
+				faucetPassword, fpErr = readPassword("Enter faucet wallet password: ")
+				if fpErr != nil {
+					return fmt.Errorf("read faucet password: %w", fpErr)
+				}
+			}
+			fks, fErr := keystore.Load(faucetWallet)
+			if fErr != nil {
+				return fmt.Errorf("load faucet keystore: %w", fErr)
+			}
+			fPriv, fErr := keystore.Decrypt(fks, faucetPassword)
+			if fErr != nil {
+				return fmt.Errorf("decrypt faucet keystore: %w", fErr)
+			}
+			cfg.FaucetAddr = fks.Address
+			cfg.FaucetKey = fPriv
+			cfg.FaucetPub = fks.PublicKey
+		}
+
 		n, err := node.NewNode(cfg)
 		if err != nil {
 			return err
@@ -173,6 +196,7 @@ func init() {
 	startCmd.Flags().StringVar(&chainID, "chain-id", "", "Chain ID (default from config or wblue-mainnet-1)")
 	startCmd.Flags().BoolVar(&genesis, "genesis", false, "Create a new chain (genesis block). Only use this once to bootstrap a new network")
 	startCmd.Flags().MarkHidden("genesis")
+	startCmd.Flags().StringVar(&faucetWallet, "faucet-wallet", "", "Path to faucet wallet keystore file")
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(versionCmd)
 }
